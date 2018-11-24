@@ -7,7 +7,7 @@ class myClass: public Monitorable{
 	cond my_cond = cond_gen();
 	int x = 0;
 public:
-	myClass(Semaphore& monitor_mutex):Monitorable(monitor_mutex){}
+	myClass(Mutex& monitor_mutex):Monitorable(monitor_mutex){}
 	void test(){
 		x++;
 		std::cout<<"x je sada "<<x<<std::endl;

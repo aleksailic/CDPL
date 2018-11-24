@@ -28,7 +28,7 @@ class Barrier:public Monitorable{
 	int o_count = 0;
 	int form_count = 0;
 public:
-	Barrier(Semaphore& mutex):Monitorable(mutex){}	
+	Barrier(Mutex& mutex):Monitorable(mutex){}	
 
 	void insert(Atom& atom){
 		if(atom.type == Atom::H){

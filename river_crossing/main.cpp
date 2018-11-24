@@ -50,7 +50,7 @@ class Boat: public Monitorable{
 
 	friend Captain; //captain can access nitsy bitsy elements
 public:
-	Boat(Semaphore& mutex):Monitorable(mutex),ready_to_sail(0){}
+	Boat(Mutex& mutex):Monitorable(mutex),ready_to_sail(0){}
 
 	bool insert(Passenger& passenger){//boat is not here :(, need to wait
 		if(!boat_available) return false;
@@ -134,6 +134,6 @@ int main(){
 
 	Captain captain(mon->demonitorize()); //captain gets his boat
 	captain.start();
-	ThreadGenerator<Passenger> tg(4,6); //2 and 3 sec diff
+	ThreadGenerator<Passenger> tg(2,3); //2 and 3 sec diff
 	tg.start();
 }

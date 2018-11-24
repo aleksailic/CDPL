@@ -38,7 +38,7 @@ class Bridge:public Monitorable{
 	cond bridge_empty = cond_gen();
 
 public:
-	Bridge(sem& mutex):Monitorable(mutex){};
+	Bridge(Mutex& mutex):Monitorable(mutex){};
 	void pass(Car& car){
 		//rather lengthy if, skecth out logic on paper it is more easier than to explain like this
 		if( !enter[opp(car.dir)].empty() && ((current_dir==car.dir && flip_schedueled) || ((current_dir==opp(car.dir) && !flip_schedueled))) ){
@@ -99,7 +99,7 @@ void Car::run(){
 	(*mon)->exit(*this);
 }
 
-int main(int argc. char** argv){
+int main(int argc, char** argv){
 	srand(random_seed);
 	mon = new monitor<Bridge>;
 
