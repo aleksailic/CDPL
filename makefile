@@ -3,7 +3,7 @@ TARGET ?= a.out
 SRC_DIRS ?= .
 CC=g++
 
-SRCS := $(shell find $(SRC_DIRS) -name *.cpp -or -name *.c -or -name *.s)
+SRCS := $(shell find $(SRC_DIRS) -mindepth 0 -maxdepth 1 -name *.cpp -or -name *.c -or -name *.s)
 OBJS := $(addsuffix .o,$(basename $(SRCS)))
 DEPS := $(OBJS:.o=.d)
 

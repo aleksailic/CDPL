@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[[ -z "$1" ]] && echo "usage: ./build.sh all|clean|project_name" && exit 1
+[[ -z "$1" ]] && echo "usage: ./build.sh all|clean|project_path" && exit 1
 base=$(pwd)
 find . -mindepth 3 -maxdepth 3 -type d -not -path '*/\.*' -print0 | while IFS= read -r -d $'\0' dir; do
 	cd "$dir"
