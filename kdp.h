@@ -1,4 +1,3 @@
-#pragma once
 #ifndef KDP_H
 #define KDP_H
 
@@ -41,6 +40,7 @@
 #include <cstring>
 #include <sstream>
 #include <utility>
+#include <memory>
 
 namespace Concurrent {
 	class Semaphore {
@@ -48,7 +48,7 @@ namespace Concurrent {
 		std::condition_variable cond;
 		int val;
 	public:
-		Semaphore(int val = 0) : val(val){}
+		Semaphore(int val = 0) : val(val) {}
 		inline void signal() {
 			std::unique_lock<std::mutex> lock(mutex);
 			if (val++ < 0)
@@ -77,7 +77,7 @@ namespace Concurrent {
 		std::thread* thread = nullptr;
 		const char * name;
 	public:
-		Thread(const char * name = "thread") :name(name){}
+		Thread(const char * name = "thread") :name(name) {}
 		void start() {
 			thread = new std::thread(Thread::fn_caller, this);
 #ifdef DEBUG_THREAD
@@ -85,7 +85,7 @@ namespace Concurrent {
 #endif
 		}
 		void join() {
-			if(thread && thread->joinable()){
+			if (thread && thread->joinable()) {
 #ifdef DEBUG_THREAD
 				std::cout << "waiting for " << name << " to join" << std::endl;
 #endif
@@ -95,7 +95,7 @@ namespace Concurrent {
 		virtual ~Thread() {
 			join();
 #ifdef DEBUG_THREAD
-			if(thread){
+			if (thread) {
 				auto id = thread->get_id();
 				delete thread;
 				std::cout << "THREAD[" << id << "]: " << name << " deleted" << std::endl;
@@ -236,18 +236,24 @@ namespace Concurrent {
 }
 
 namespace MPI {
-	using namespace Concurrent;
+	using namespace std::chrono_literals;
 	typedef uint_fast32_t priority_t;
 	typedef uint_fast8_t status_t;
+	typedef unsigned int uint;
+	typedef std::chrono::duration<long, std::milli> duration_t;
+	typedef std::chrono::time_point< std::chrono::high_resolution_clock > timestamp_t;
+
+	enum { VERY_HIGH, HIGH, MEDIUM, LOW, VERY_LOW };
+	enum { SUCCESS, TIMEOUT, EXPIRED };
 
 	template <class T>
 	class MessageBox {
 	public:
-		virtual void put(const T& message, priority_t p, long ttl) = 0;
-		virtual T get(long ttd, status_t* status) = 0;
+		virtual void put(const T& message, priority_t p, const duration_t& ttl) = 0;
+		virtual T get(const duration_t& ttd, status_t* status) = 0;
 	};
 	template <class T>
-	class CondMessageBox : public MessageBox<T>, public Monitorable {
+	class MonitorableMessageBox : public MessageBox<T>, public Concurrent::Monitorable {
 		cond notFull = cond_gen();
 		cond notEmpty = cond_gen();
 
@@ -256,37 +262,73 @@ namespace MPI {
 		struct MessageWrap {
 			T message;
 			priority_t p;
-			long ttl;
+			duration_t ttl;
+			timestamp_t ts;
+			MessageWrap(const T& message, priority_t p, const duration_t& ttl) :message(message), p(p), ttl(ttl),ts(std::chrono::high_resolution_clock::now()) {}
+			friend bool operator>(const MessageWrap& mw1, const MessageWrap& mw2) { return mw1.p > mw2.p; }
 		};
 
-		std::list<MessageWrap> buffer;
+		typedef std::priority_queue<MessageWrap, std::vector<MessageWrap>, std::greater<MessageWrap>> buffer_t;
+		buffer_t buffer;
 		const char* m_name;
 	public:
-		CondMessageBox(Mutex& mutex, uint capacity = 10, const char* name = "default") :Monitorable(mutex), capacity(capacity), m_name(name) {}
-		void put(const T& message, priority_t p = 0, long ttl = 0) override {
+		MonitorableMessageBox(Concurrent::Mutex& mutex, uint capacity = 10, const char* name = "default") :Monitorable(mutex), capacity(capacity), m_name(name) {}
+		void put(const T& message, priority_t p = MEDIUM, const duration_t& ttl = 0ms) override {
 			while (buffer.size() == capacity)
 				notFull.wait();
-			buffer.push_back(MessageWrap{ message,p,ttl });
+			buffer.emplace(message, p, ttl);
 			notEmpty.signal();
 #ifdef DEBUG_MPI
-			std::cout << name() << " message put" << std::endl;
+			fprintf(DEBUG_STREAM, "-- MessageBox(%s): message put -- \n", m_name);
 #endif
 		}
-		T get(long ttd = 0, status_t* status = nullptr) override {
-			while (buffer.size() == 0)
-				notEmpty.wait();
-			T msg = buffer.front().message;
-			buffer.pop_front();
-			notFull.signal();
+		T get(const duration_t& ttd = 0ms, status_t* status = nullptr) override {
+			auto canContinue = std::make_shared<cond>(cond(cond_gen()));
+			if (ttd != 0ms) {
+				std::thread([](std::shared_ptr<cond> canContinue, const duration_t& ttd) {
+					std::this_thread::sleep_for(ttd);
+					//TODO: discuss whether to add safety check that user has locked on canContinue before reaching this step (only possible if ttd is ridiculously small)
+					canContinue->signal();
+				}, canContinue, ttd).detach();
+			}
+			//safe to use rawe pointers because if monitor gets destroyed unwantingly, this won't be released anyway so there will be memory leak
+			//TODO: discuss whether to save the user from leakage
+			std::thread([](std::shared_ptr<cond> canContinue, buffer_t* buffer, cond* notEmpty) {
+				while (buffer->size() == 0)
+					notEmpty->wait();
+				canContinue->signal();
+			}, canContinue, &buffer, &notEmpty).detach();
+
+			canContinue->wait();
+			if (buffer.size()) {
+				auto msg_wrap = buffer.top();
+				buffer.pop();
+				notFull.signal();
+
+				if (msg_wrap.ttl == 0ms || std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - msg_wrap.ts).count() > 0) {
 #ifdef DEBUG_MPI
-			std::cout << name() << " message got" << std::endl;
+					fprintf(DEBUG_STREAM, "-- MessageBox(%s): message recieved --\n", m_name);
 #endif
-			return msg;
+					if (status) *status = SUCCESS;
+					return msg_wrap.message;
+				}else {
+#ifdef DEBUG_MPI
+					fprintf(DEBUG_STREAM, "-- MessageBox(%s): message expired --\n", m_name);
+#endif
+					if (status) *status = EXPIRED;
+				}
+			}else { //released on timeout
+#ifdef DEBUG_MPI
+				fprintf(DEBUG_STREAM, "-- MessageBox(%s): timed out! --\n", m_name);
+#endif
+				if (status) *status = TIMEOUT;
+			}
+			return T(); //TODO: discuss whether it is better to enforce the user to overload cast operator or to have specific constructor if this fails or to leave it like this
 		}
-		const char* name() { return m_name; }
+		const char* name() const { return m_name; }
 	};
 
-	template<typename T> using MonitorMessageBox = monitor<CondMessageBox<T>>;
+	template<typename T> using MonitorMessageBox = Concurrent::monitor<MonitorableMessageBox<T>>;
 }
 
 namespace Linda {
@@ -682,8 +724,10 @@ namespace Testbed {
 		}
 	public:
 		ThreadGenerator(uint min_seconds = 1, uint max_seconds = 3, Args&&... args)
-			:random_engine(random_seed+seed_offset), random_generator(min_seconds, max_seconds), stored_args(std::forward<Args>(args)...) { seed_offset+=seed_increment;}
-		~ThreadGenerator(){
+			:random_engine(random_seed + seed_offset), random_generator(min_seconds, max_seconds), stored_args(std::forward<Args>(args)...) {
+			seed_offset += seed_increment;
+		}
+		~ThreadGenerator() {
 			join();
 		}
 	};
@@ -697,7 +741,7 @@ namespace Testbed {
 			return total_num == 0 ? 0 : ((double)passed_num) / total_num;
 		}
 		friend std::ostream& operator<<(std::ostream& os, const grade_t& grade) {
-			return os << grade.passed_num << '/' << grade.total_num<<' '<<grade.score()<<std::endl;
+			return os << grade.passed_num << '/' << grade.total_num << ' ' << grade.score() << std::endl;
 		}
 	};
 
@@ -708,7 +752,7 @@ namespace Testbed {
 
 	template <typename ...Args>
 	grade_t run_tests(Args&&... args) {
-		static const std::size_t size= sizeof...(Args);
+		static const std::size_t size = sizeof...(Args);
 		bool results[size] = { args()... };
 		grade_t grade;
 		for (std::size_t i = 0; i < size; i++) {

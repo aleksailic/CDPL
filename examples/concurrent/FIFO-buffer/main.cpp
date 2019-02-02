@@ -3,7 +3,7 @@
 #include <unistd.h>
 using namespace Concurrent;
 using namespace Testbed;
-const int demo_buffer_size = 4;
+constexpr int demo_buffer_size = 4;
 
 template <class T>
 class Buffer: public Monitorable{
@@ -84,13 +84,13 @@ public:
 		join();
 	}
 };
+
+static monitor<Buffer<uint>> buffer(demo_buffer_size);
 using namespace std;
 int main(){
 	srand(random_seed);
-	monitor<Buffer<uint>>*buffer = new monitor<Buffer<uint>>(demo_buffer_size);
-
-	Consumer consumer_thread(*buffer,1000,2000);
-	Producer producer_thread(*buffer,1000,2000);
+	Consumer consumer_thread(buffer,1000,2000);
+	Producer producer_thread(buffer,1000,2000);
 
 	consumer_thread.start();
 	producer_thread.start();

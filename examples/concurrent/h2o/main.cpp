@@ -78,15 +78,14 @@ public:
 	}
 };
 
-monitor<Barrier>* mon;
+static monitor<Barrier> mon;
 void Atom::run(){
 	std::cout<< "ATOM " << (type == H ? "H" : "O") << " CREATED" << std::endl;
-	(*mon)->insert(*this);
+	mon->insert(*this);
 }
 
 int main(){
 	srand(random_seed);
-	mon = new monitor<Barrier>;
 	ThreadGenerator<Atom> tg(1,3); //1 and 3 sec diff
 	tg.start();
 	return 0;

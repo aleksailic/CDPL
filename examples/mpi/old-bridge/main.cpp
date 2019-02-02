@@ -4,7 +4,6 @@
 */
 #include "kdp.h"
 #include <cstdlib>
-#include <unistd.h>
 
 #define N_CARS 20
 #define MAX_MASS 201
@@ -48,7 +47,7 @@ public:
             msg = mbx[id]->get();
 
         std::cout<< "CAR[" << (direction == SOUTH ? "S" : "N") << '#' << id << "] IS PASSING" << std::endl;
-        sleep(rand() % 4 + 3);
+        std::this_thread::sleep_for(std::chrono::seconds(rand() % 4 + 3));
 
         bridge_mbx->put(msg_t{id,EXIT,direction,mass});
         std::cout<< "CAR[" << (direction == SOUTH ? "S" : "N") << '#' << id << "] EXITING" << std::endl;
@@ -67,7 +66,6 @@ public:
     void run() override{
         while(true){
             msg_t msg = mbx->get();
-            std::cout<<mbx->name()<<" recieved msg!"<<std::endl;
             switch(msg.op){
                 case EXIT:
                     current_mass -= msg.mass;
@@ -76,13 +74,13 @@ public:
                     for(auto i = wait_list.begin(); i!= wait_list.end();){
                         if(i->dir == current_dir && current_mass+i->mass < MAX_MASS){
                             Car::mbx[i->id]->put(msg_t{0,PASS,(dir_t)0,0}); //let him pass
+                            current_mass+=i->mass;
                             i = wait_list.erase(i);
                         }else
                             i++;
                     }
                     break;
                 case ENTER:
-                    std::cout<<"enter operation from car#" << msg.id << std::endl;
                     if( msg.dir == current_dir && current_mass+msg.mass < MAX_MASS){
                         current_mass += msg.mass;
                         Car::mbx[msg.id]->put(msg_t{0,PASS,(dir_t)0,0});

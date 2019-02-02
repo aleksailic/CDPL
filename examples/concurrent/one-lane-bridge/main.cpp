@@ -89,7 +89,7 @@ public:
 	}
 };
 
-monitor<Bridge>* mon;
+static monitor<Bridge> mon;
 mutex_t print_mutex;
 
 void Car::run(){
@@ -97,7 +97,7 @@ void Car::run(){
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] CREATED\n";
 	print_mutex.unlock();
 	//CAR TRYING TO PASS
-	(*mon)->pass(*this);
+	mon->pass(*this);
 
 	print_mutex.lock();
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] IS PASSING\n";
@@ -109,14 +109,13 @@ void Car::run(){
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] EXITING\n";
 	print_mutex.unlock();
 	//CAR EXIT BRIDGE
-	(*mon)->exit(*this);
+	mon->exit(*this);
 }
 
 int main(int argc, char** argv){
 	srand(random_seed);
-	mon = new monitor<Bridge>;
 	
-	std::vector< ThreadGenerator<Car> > many_car_generators(3,ThreadGenerator<Car>(1,3));
+	std::vector< ThreadGenerator<Car> > many_car_generators(1,ThreadGenerator<Car>(1,3));
 	for(auto& gen: many_car_generators)
 		gen.start();
 	return 0;	

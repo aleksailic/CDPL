@@ -14,7 +14,7 @@ constexpr int boat_travel_time = 5; //in seconds
 
 struct Passenger: public Thread{
 	enum t_id {A=1,B};
-	static int last_id;
+	static std::atomic<int> last_id;
 	int id;
 	t_id type ;
 	void run() override;
@@ -24,7 +24,7 @@ struct Passenger: public Thread{
 		type = static_cast<t_id>(rand() % 2 + 1);
 	}
 };
-int Passenger::last_id = 0;
+std::atomic<int> Passenger::last_id(0);
 
 class Captain;
 class Boat: public Monitorable{
@@ -120,20 +120,19 @@ public:
 };
 
 
-monitor<Boat>* mon;
+static monitor<Boat> mon;
 
 void Passenger::run(){
 	std::cout<< "PASSENGER " << (type == A ? "A" : "B") << "#"<<id<<" CREATED" << std::endl;
-	while(!(*mon)->insert(*this))
-		(*mon)->waitBoat();
+	while(!mon->insert(*this))
+		mon->waitBoat();
 }
 
 
 int main(){
 	srand(random_seed);
-	mon = new monitor<Boat>;
 
-	Captain captain(**mon); //captain gets his boat
+	Captain captain(*mon); //captain gets his boat demonitorized
 	captain.start();
 	ThreadGenerator<Passenger> tg(2,3); //2 and 3 sec diff
 	tg.start();
