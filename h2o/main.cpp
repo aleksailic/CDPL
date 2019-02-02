@@ -1,10 +1,9 @@
-#define NODEBUG
-
-#include <iostream>
-#include "req.h"
+#include "kdp.h"
 #include <exception>
+#include <cstdlib> 
 
-#include <stdlib.h> 
+using namespace Concurrent;
+using namespace Testbed;
 
 typedef int t_id;
 struct Atom: public Thread{

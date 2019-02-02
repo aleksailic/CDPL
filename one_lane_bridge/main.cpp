@@ -1,11 +1,17 @@
-#include "req.h"
+#include "kdp.h"
 #include <cstdlib>
+#include <unistd.h>
+
+#include <atomic>
+
+using namespace Concurrent;
+using namespace Testbed;
 
 typedef int dir_t;
 enum {SOUTH=0,NORTH};
 dir_t opp(dir_t dir){return (dir == SOUTH ? NORTH : SOUTH);}
 
-int next_id=0;
+std::atomic<int> next_id(0);
 
 class Bridge;
 class Car: public Thread{
@@ -45,6 +51,7 @@ public:
 			enter[car.dir].wait(); //wait for your turn
 		}
 		if(cars_on_bridge>0 && current_dir== opp(car.dir)){ //wait for opposite turn to fully complete
+			flip_schedueled=true; //i've arrived before others from other side were waiting let me go!
 			bridge_empty.wait();
 			//what if new guy from opp dir arrived JIT before bridge empties? q: who shall pass? a: depends on scheduler. inconclusive in this example
 		}
@@ -55,7 +62,6 @@ public:
 		//CAR IS ALLOWED TO PASS
 
 		current_dir = car.dir; //car can pass if there is no one on the other side so update this var
-
 		//only keep count if cars are waiting from other side
 		if( !enter[opp(car.dir)].empty()){
 			current_count++;	
@@ -84,17 +90,24 @@ public:
 };
 
 monitor<Bridge>* mon;
+mutex_t print_mutex;
 
 void Car::run(){
+	print_mutex.lock();
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] CREATED\n";
+	print_mutex.unlock();
 	//CAR TRYING TO PASS
 	(*mon)->pass(*this);
 
+	print_mutex.lock();
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] IS PASSING\n";
+	print_mutex.unlock();
 	//CAR IS NOW DRIVING THROUGH THE BRIDGE
 	sleep(rand() % 4 + 3);
 
+	print_mutex.lock();
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] EXITING\n";
+	print_mutex.unlock();
 	//CAR EXIT BRIDGE
 	(*mon)->exit(*this);
 }
@@ -102,8 +115,8 @@ void Car::run(){
 int main(int argc, char** argv){
 	srand(random_seed);
 	mon = new monitor<Bridge>;
-
-	std::vector< ThreadGenerator<Car> > many_car_generators(1,ThreadGenerator<Car>(1,3));
+	
+	std::vector< ThreadGenerator<Car> > many_car_generators(3,ThreadGenerator<Car>(1,3));
 	for(auto& gen: many_car_generators)
 		gen.start();
 	return 0;	

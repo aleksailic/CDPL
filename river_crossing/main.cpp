@@ -1,7 +1,8 @@
-#define NODEBUG
+#include "kdp.h"
+#include <unistd.h>
 
-#include "req.h"
-#include <stdlib.h> 
+using namespace Concurrent;
+using namespace Testbed;
 
 constexpr int num_of_groups  = 2;
 constexpr int boat_capacity = 4;
@@ -132,7 +133,7 @@ int main(){
 	srand(random_seed);
 	mon = new monitor<Boat>;
 
-	Captain captain(mon->demonitorize()); //captain gets his boat
+	Captain captain(**mon); //captain gets his boat
 	captain.start();
 	ThreadGenerator<Passenger> tg(2,3); //2 and 3 sec diff
 	tg.start();

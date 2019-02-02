@@ -1,6 +1,6 @@
 #!/bin/bash
 
-[[ -z "$1" ]] && echo "usage: ./build.sh all|clean" && exit 1
+[[ -z "$1" ]] && echo "usage: ./build.sh all|clean|project_name" && exit 1
 find . -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d $'\0' dir; do
 	cd "$dir"
 	stripped_dir=$(echo "$dir" | cut -c 3-)
