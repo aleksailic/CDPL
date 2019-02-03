@@ -22,7 +22,7 @@ C++1x and STL compliant compiler, GNU Make
 1. Start by cloning this git repository
 
 ```
-git clone https://github.com/aleksailic/cdpl
+git clone https://github.com/aleksailic/CDPL
 ```
 2. Change your path to newly created folder
 
@@ -59,13 +59,13 @@ Feel free to submit a pull request or contact me at [aleksa.d.ilic@gmail.com](ma
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/aleksailic/cdpl/tags). 
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/aleksailic/CDPL/tags). 
 
 ## Authors
 
 * **Aleksa Ilić** - *Core work* - [aleksailic](https://github.com/aleksailic)
 
-See also the list of [contributors](https://github.com/aleksailic/cdpl/contributors) who participated in this project.
+See also the list of [contributors](https://github.com/aleksailic/CDPL/contributors) who participated in this project.
 
 ## License
 
