@@ -1,6 +1,6 @@
 #define DEBUG_LINDA
 #define DEUBG_PHILOSOPHERS
-#include "kdp.h"
+#include "CDPL.h"
 #include <cstdlib>
 using namespace Linda;
 

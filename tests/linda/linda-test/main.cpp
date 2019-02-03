@@ -1,5 +1,5 @@
 #define DEBUG_LINDA
-#include "kdp.h"
+#include "CDPL.h"
 #include <unistd.h>
 using namespace Linda;
 using namespace Concurrent;

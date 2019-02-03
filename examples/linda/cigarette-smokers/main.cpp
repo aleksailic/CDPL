@@ -1,7 +1,7 @@
 #define DEBUG_LINDA
 #define DEBUG_SMOKERS
 
-#include "kdp.h"
+#include "CDPL.h"
 #include <cstdlib>
 using namespace Linda;
 

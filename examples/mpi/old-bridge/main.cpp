@@ -2,7 +2,7 @@
     Similar to one_lane_bridge problem, just needs to utilize MPI as means of communication
     and no optimization for direction flip on max car pass
 */
-#include "kdp.h"
+#include "CDPL.h"
 #include <cstdlib>
 
 #define N_CARS 20
