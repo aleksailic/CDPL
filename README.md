@@ -49,7 +49,7 @@ This can be very useful when creating your own solution.
 
 ## Deployment
 
-The only requirement is the library file contained in CDPL.h that can be statically or dynamically linked (once we release an official version).
+This template library is fully declared and defined in CDPL.h file and should be statically linked in your project.
 
 Make sure to include necessary licensing/copyright files when deploying your project.
 
