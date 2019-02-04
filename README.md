@@ -5,7 +5,7 @@ Collection of useful classes and utilities to kick-start your latest parallel pr
 Includes implementations of widely used abstractions like *semaphores*, *mutexes*, *monitors*, *threads*,
 *message passing interface (mailbox)* and revamped coordination language *linda* which integrates seamlessly into the modern c++ environment 
 
-Library is *multiplatform* and can be used interchangeably on any operating system as long as compiler is c++1x and STL compliant,
+Library is *multiplatform* and can be used interchangeably on any operating system as long as compiler is c++14 and STL compliant,
 although build script for examples and tests is given only for the Linux environment
 
 ## Getting Started
@@ -15,7 +15,7 @@ See deployment for notes on how to deploy the project on a live system.
 
 ### Prerequisites
 
-C++1x and STL compliant compiler, GNU Make
+C++14 and STL compliant compiler, GNU Make
 
 ### Installing
 

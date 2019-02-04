@@ -58,20 +58,35 @@ namespace Concurrent {
 		int val;
 	public:
 		Semaphore(int val = 0) : val(val) {}
+		/**
+		 * Increments the internal value of semaphore by 1.
+		 * If the pre-increment value was negative (there are processes waiting for resource),
+		 * it transfers a blocked process from the semaphore's waiting queue to the ready queue
+		 */
 		inline void signal() {
 			std::unique_lock<std::mutex> lock(mutex);
 			if (val++ < 0)
 				cond.notify_one();
 		}
+		/**
+		 * Decrements the internal value of semaphore by 1. After the decrement,
+		 * if the post-decrement value was negative, the process executing wait is blocked
+		 * (added to the semaphore's queue). Otherwise, the process continues execution.
+		 */
 		inline void wait() {
 			std::unique_lock<std::mutex> lock(mutex);
 			if (--val < 0)
 				cond.wait(lock);
 		}
 	};
+	typedef Semaphore sem_t;
 
+	/**
+	 * Eqiuivalent of semaphore with initial value 1, where lock and unlock methods
+	 * are aliases for signal and wait operation.
+	 */
 	class Mutex {
-		Semaphore sem;
+		sem_t sem;
 	public:
 		Mutex() :sem(1) {}
 		inline void lock() { sem.wait(); }
@@ -116,9 +131,11 @@ namespace Concurrent {
 	};
 
 	typedef Mutex mutex_t;
-	typedef Semaphore sem_t;
 	typedef unsigned int uint;
 
+	/**
+	 * Parent class for all classes that are candidates to become monitor
+	 */
 	class Monitorable {
 	protected:
 		class cond {
@@ -135,7 +152,7 @@ namespace Concurrent {
 			};
 			struct compare_node_ptr {
 				bool operator() (node_t* n1, node_t* n2) {
-					return n1->rank < n2->rank;
+					return n1->rank < n2->rank; //smaller number => higher priority
 				}
 			};
 
@@ -145,6 +162,10 @@ namespace Concurrent {
 		public:
 			cond(mutex_t& monitor_mutex) : monitor_mutex(monitor_mutex) {}
 			cond(cond&& rhs) :monitor_mutex(rhs.monitor_mutex) {}
+			/**
+			 *  Blocks the current process until the condition variable is woken up.
+			 *  @param uint priority Set blocked process' priority in internal blocked queue. Smaller number => higher priority.
+			 */
 			void wait(uint priority = 0) {
 				std::unique_lock<std::mutex> lock(mutex);
 				node_t* node = new node_t(priority);
@@ -161,6 +182,10 @@ namespace Concurrent {
 				delete node;
 				monitor_mutex.lock();
 			}
+			/**
+			 * Unblock process with the highest priority from blocked queue
+			 * Smaller number => higher priority.
+			 */
 			void signal() {
 				std::unique_lock<std::mutex> lock(mutex);
 				if (!thq.empty()) {
@@ -169,6 +194,9 @@ namespace Concurrent {
 				}
 
 			}
+			/**
+			 * Unblock all processes from blocked queue
+			 */
 			void signalAll() {
 				std::unique_lock<std::mutex> lock(mutex);
 				while (!thq.empty()) {
@@ -176,39 +204,63 @@ namespace Concurrent {
 					thq.pop();
 				}
 			}
+			/**
+			 * Check whether blocked queue is empty
+			 * @return bool
+			 */
 			bool empty() {
 				std::unique_lock<std::mutex> lock(mutex);
 				return thq.empty();
 			}
+			/**
+			 *  Check if there are processes in blocked queue
+			 * @return bool
+			 */
 			bool queue() {
 				std::unique_lock<std::mutex> lock(mutex);
 				return !thq.empty();
 			}
+			/**
+			 * Get the priority of the next process to be unblocked from queue.
+			 * If queue is empty returns MAXUINT
+			 * @return uint
+			 */
 			uint minrank() {
 				std::unique_lock<std::mutex> lock(mutex);
 				return thq.empty() ? -1 : thq.top()->rank;
 			}
 		};
+		/**
+		 * Each Monitorable object has its own condition_generator that
+		 * contains reference to its mutex and serves to deliver it to
+		 * condition variables when they are constructed
+		 */
 		class condition_generator {
-			Mutex& monitor_mutex;
+			mutex_t& monitor_mutex;
 		public:
-			condition_generator(Mutex& monitor_mutex) :monitor_mutex(monitor_mutex) {}
-			constexpr Mutex& operator()() {
+			condition_generator(mutex_t& monitor_mutex) :monitor_mutex(monitor_mutex) {}
+			mutex_t& operator()() {
 				return monitor_mutex;
 			}
 		};
 		condition_generator cond_gen;
 	public:
-		Monitorable(Mutex& monitor_mutex) :cond_gen(monitor_mutex) {}
+		Monitorable(mutex_t& monitor_mutex) :cond_gen(monitor_mutex) {}
 	};
 
 	template <class T>
 	class Monitor {
 		static_assert(std::is_base_of<Monitorable, T>::value, "T must inherit from Monitorable");
 	protected:
-		Mutex mutex;
-		T obj;
+		mutex_t mutex; //monitor's mutex
+		T obj; //hidden Monitorable object which methods will be called
 
+		/**
+		 * Helper class that effectively locks and unlocks the mutex on function call.
+		 * This is achieved in RAII fashion, as temporary helper object gets constructed
+		 * (thus acquiring mutex) when overloaded operator-> gets called, and immediately
+		 * after function call gets destroyed (thus releasing mutex).
+		 */
 		class helper {
 			Monitor* mon;
 		public:
@@ -227,6 +279,9 @@ namespace Concurrent {
 				std::cout << "MONITOR: UNLOCKING" << std::endl;
 #endif
 			}
+			/**
+			 * Nifty hack to insert underlying object and create illusion of direct access
+			 */
 			T* operator->() { return &mon->obj; }
 		};
 
@@ -237,8 +292,15 @@ namespace Concurrent {
 			std::cout << "MONITOR: CREATED" << std::endl;
 #endif
 		}
+		/**
+		 * Call underlying object's function in mutually exclusive way.
+		 */
 		helper operator->() { return helper(this); }
-		T& operator*() { return obj; } //return object without monitor
+		/**
+		 * Returns demonitorized object. Use with caution as locking on condition
+		 * from underlying Monitorable object will lead to deadlock.
+		 */
+		T& operator*() { return obj; }
 	};
 
 	template<typename T> using monitor = Monitor<T>;
