@@ -6,143 +6,161 @@
 	License, v. 2.0. If a copy of the MPL was not distributed with this
 	file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
-
+#define DEBUG_BOAT
 #include "CDPL.h"
-#include <unistd.h>
-
 using namespace Concurrent;
 using namespace Testbed;
+using namespace std::chrono_literals;
 
 constexpr int num_of_groups  = 2;
 constexpr int boat_capacity = 4;
 constexpr int allowed_count = boat_capacity/num_of_groups; //if distributed that is allowed count of each
+constexpr auto boat_travel_time = 5s; //for simulation
 
-//for simulation
-constexpr int boat_travel_time = 5; //in seconds
-
-
+static_assert( boat_capacity % num_of_groups == 0 ,"Boat capacity must be divisible with number of groups");
+static_assert( num_of_groups <= 4, "Number of groups must be less or equal to 4");
 struct Passenger: public Thread{
-	enum t_id {A=1,B};
-	static std::atomic<int> last_id;
-	int id;
-	t_id type ;
-	void run() override;
+    enum type_t{A,B,C,D};
+    static std::atomic<int> next_id;
+    type_t type;
+    int id;
+    void run() override;
+    const char * map(type_t type){switch(type){case A: return "A";case B: return "B";case C: return "C";case D: return "D";};}
+    Passenger(){
+        id = next_id++;
+        type = static_cast<type_t>(rand() % num_of_groups);
+#ifdef DEBUG_BOAT
+        fprintf(DEBUG_STREAM, "-- PASSENGER %s#%d created --\n",map(type),id);
+#endif
+    }
+};  
+std::atomic<int> Passenger::next_id {0};
 
-	Passenger(){
-		id=last_id++;
-		type = static_cast<t_id>(rand() % 2 + 1);
-	}
-};
-std::atomic<int> Passenger::last_id(0);
-
-class Captain;
 class Boat: public Monitorable{
-	enum s_id {ALL,DISTRIBUTE,NYD}; //whether to accept all from one group, to distribute or not yet determined
-	int group_count[num_of_groups]={0};
+    int count[num_of_groups] = {0};
+    
+    std::vector< Passenger::type_t > chosen_types;
+    std::vector< const Passenger* > current_group;
 
-	Passenger* current_group[boat_capacity];
-	int current_group_count = 0;
+    bool boat_here = true;
 
-	s_id state = NYD;
-	Passenger::t_id chosen_group = static_cast<Passenger::t_id>(0); //group is not yet chosen
+    cond boat_avail = cond_gen();
+    cond boat_full = cond_gen();
 
-	bool boat_available = true;
-	cond boat_return = cond_gen();
+    cond start_sail = cond_gen();
+    cond end_sail = cond_gen();
 
-	Semaphore ready_to_sail;
+    inline int max_per_type(){
+        int divisor = chosen_types.size();
+        while( boat_capacity % divisor != 0)
+            divisor++;
+        return boat_capacity / divisor;
+    }
+    inline int current_type_max(){
+        int max_count = 0;
+        for(int i=0;i<num_of_groups;i++)
+            if(max_count < count[i])
+                max_count = count[i];
+        return max_count;
+    }
 
-	void print(){
-		std::cout<<"BOAT: {";
-		for(int i=0;i<current_group_count;i++)
-			std::cout<< (current_group[i]->type == Passenger::t_id::A ? "A" : "B")<<'#'<<current_group[i]->id << ' ';
+    template <typename Container, typename Element>
+    bool is_in(const Container& container, const Element& element){
+        return std::find(std::begin(container), std::end(container), element) != std::end(container);
+    }
+
+    inline void board_allow(const Passenger& passenger){
+        current_group.push_back(&passenger);
+        count[passenger.type]++;
+        print();
+    }
+    inline void board_prevent(const Passenger& passenger){
+        boat_avail.wait();
+        board(passenger); //not the best solution, but makes the code more readable
+    }
+
+    inline void print(){
+        std::cout<<"BOAT: {";
+        for(const Passenger* p: current_group)
+			std::cout<< (p->type == Passenger::type_t::A ? "A" : "B")<<'#'<<p->id << " ";
 		std::cout<<"}\n";
-	}
+    }
 
-	friend Captain; //captain can access nitsy bitsy elements
+    void reset(){
+        for(int i=0;i<num_of_groups;i++) count[i]=0;
+        chosen_types.clear();
+        current_group.clear();
+        boat_here = true;
+        boat_avail.signalAll(); //code can be more efficient. left as an excercise, no need to complicate 
+    }
 public:
-	Boat(Mutex& mutex):Monitorable(mutex),ready_to_sail(0){}
+    Boat(mutex_t& mutex):Monitorable(mutex){}
+    void board(const Passenger& passenger){
+        while(!boat_here)
+            boat_avail.wait();
+            
+        if(current_group.size()==0){ //boat is empty no need to test anything
+            chosen_types.push_back(passenger.type);
+            board_allow(passenger);
+        }else if(current_group.size() < boat_capacity){
+            if(is_in(chosen_types,passenger.type) && count[passenger.type] < max_per_type()){
+                board_allow(passenger);
+            }else if(!is_in(chosen_types,passenger.type)){ //need to check whether wr are allowed to make another group
+                chosen_types.push_back(passenger.type);
+                if(current_type_max() <= max_per_type()){
+                    board_allow(passenger);
+                }else{
+                    chosen_types.pop_back();
+                    board_prevent(passenger);
+                }
+            }else{
+                board_prevent(passenger);
+            }
+        }else throw;
 
-	bool insert(Passenger& passenger){//boat is not here :(, need to wait
-		if(!boat_available) return false;
-		switch(state){
-			case NYD:
-				if(!chosen_group){
-					group_count[chosen_group = passenger.type]++;
-					current_group [current_group_count++] = &passenger;
-				}else if(chosen_group == passenger.type){
-					state = ALL;
-					return insert(passenger);
-				}else{
-					state = DISTRIBUTE;
-					return insert(passenger);
-				}
-				break;
-			case DISTRIBUTE:
-				if(group_count[passenger.type]==allowed_count) // whoops, max count reached, no go for you
-					return false;
-				else{
-					group_count[passenger.type]++; //okay you can go...
-					current_group[current_group_count++] = &passenger; //add passenger to the current group
-				}
-				break;
-			case ALL:
-				if(passenger.type != chosen_group) // whoops, wrong group wait my friend
-					return false;
-				else{
-					group_count[passenger.type]++; //okay you can go...
-					current_group[current_group_count++] = &passenger; //add passenger to the current group
-				}
-				break;
-		}
-		print();
-		if(current_group_count == boat_capacity){
-			std::cout<<"BOAT IS SAILING :) \n";
-			boat_available = false;
-			ready_to_sail.signal(); //time_to_sail
-		}
-		return true; //boy on board
-	}
+        if(current_group.size() != boat_capacity)
+            boat_full.wait();
+        else{
+            boat_full.signalAll();
+            boat_here = false;
+            start_sail.signal();
+        }
+    }
 
-	void waitBoat(){
-		boat_return.wait();	
-	}
+    void sail(const Passenger& passenger){
+        if(is_in(current_group,&passenger))
+            end_sail.wait();
+    }
+
+    friend class Captain;
 };
+static monitor<Boat> boat;
 
-class Captain:public Thread{
-	Boat& my_boat;
-public:
-	Captain(Boat& boat):my_boat(boat){}
-	void run() override{
-		while(true){
-			my_boat.ready_to_sail.wait();	
-			sleep(boat_travel_time);
-
-			for(int& counter: my_boat.group_count)
-				counter=0;
-			my_boat.current_group_count=0;
-			my_boat.boat_available=true;
-
-			my_boat.boat_return.signalAll(); // vratija se sime!!
-			std::cout<<"VRATIJA SE SIME!!! \n";
-		}
-	}
+class Captain: public Thread{
+    void run()override{
+        while(true){
+            if(boat->boat_here)
+                boat->start_sail.wait();
+            std::cout<<"BOAT is sailing...\n";
+            std::this_thread::sleep_for(boat_travel_time);
+            std::cout<<"BOAT is here!\n";
+            boat->reset();
+            boat->end_sail.signalAll();
+        }
+    }
 };
-
-
-static monitor<Boat> mon;
 
 void Passenger::run(){
-	std::cout<< "PASSENGER " << (type == A ? "A" : "B") << "#"<<id<<" CREATED" << std::endl;
-	while(!mon->insert(*this))
-		mon->waitBoat();
+    boat->board(*this);
+    boat->sail(*this);
 }
 
-
 int main(){
-	srand(random_seed);
+    srand(RANDOM_SEED);
+    ThreadGenerator<Passenger> passenger_gen(1,2);
+    Captain captain;
 
-	Captain captain(*mon); //captain gets his boat demonitorized
-	captain.start();
-	ThreadGenerator<Passenger> tg(2,3); //2 and 3 sec diff
-	tg.start();
+    captain.start();
+    passenger_gen.start();
+    return 0;
 }
