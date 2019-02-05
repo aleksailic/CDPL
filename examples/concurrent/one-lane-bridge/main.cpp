@@ -5,13 +5,18 @@
 	This Source Code Form is subject to the terms of the Mozilla Public
 	License, v. 2.0. If a copy of the MPL was not distributed with this
 	file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+	..............................................................................
+
+	One lane bridge problem: Bridge has only one lane. Cars are coming from NORTH
+	and SOUTH. There can only be MAX_CARS on the bridge at the same time. Try to
+	minimize starvation.
+
+	Solution using monitor
 */
 
 #include "CDPL.h"
 #include <cstdlib>
-#include <unistd.h>
-
-#include <atomic>
 
 using namespace Concurrent;
 using namespace Testbed;
@@ -73,7 +78,7 @@ public:
 		current_dir = car.dir; //car can pass if there is no one on the other side so update this var
 		//only keep count if cars are waiting from other side
 		if( !enter[opp(car.dir)].empty()){
-			current_count++;	
+			current_count++;
 		}
 		cars_on_bridge++;
 		//signal next car to pass depending on threshold
@@ -112,7 +117,7 @@ void Car::run(){
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] IS PASSING\n";
 	print_mutex.unlock();
 	//CAR IS NOW DRIVING THROUGH THE BRIDGE
-	sleep(rand() % 4 + 3);
+	std::this_thread::sleep_for(std::chrono::seconds(rand() % 4 + 3));
 
 	print_mutex.lock();
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] EXITING\n";
@@ -123,9 +128,9 @@ void Car::run(){
 
 int main(int argc, char** argv){
 	srand(random_seed);
-	
+
 	std::vector< ThreadGenerator<Car> > many_car_generators(1,ThreadGenerator<Car>(1,3));
 	for(auto& gen: many_car_generators)
 		gen.start();
-	return 0;	
+	return 0;
 }

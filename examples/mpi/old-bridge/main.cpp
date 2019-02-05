@@ -6,8 +6,16 @@
     License, v. 2.0. If a copy of the MPL was not distributed with this
     file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-    Similar to one_lane_bridge problem, just needs to utilize MPI as means of communication
-    and no optimization for direction flip on max car pass
+    ..............................................................................
+
+    Old bridge problem: Citizens of Brzi Brod have an old bridge that has only
+    one lane. Cars are coming from NORTH and SOUTH. Each car has its own mass.
+    Old bridge can take MAX_MASS before it "izrazito" collapses. Help the citizens
+    of Brzi Brod pass the bridge.
+
+    Solution similar to one-lane-bridge example given in concurrent folder, just
+    needs to utilize MPI as means of communication and no optimization for direction
+    flip on max car pass.
 */
 
 #include "CDPL.h"
@@ -114,7 +122,7 @@ public:
 MonitorMessageBox<msg_t>* bridge_mbx;
 int main(){
     srand(539235);
-    
+
     bridge_mbx = new MonitorMessageBox<msg_t>(10,"oldbridge");
 
     OldBridge olb(*bridge_mbx);

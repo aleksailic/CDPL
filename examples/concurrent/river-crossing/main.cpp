@@ -5,9 +5,20 @@
 	This Source Code Form is subject to the terms of the Mozilla Public
 	License, v. 2.0. If a copy of the MPL was not distributed with this
 	file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+    ..............................................................................
+
+    River crossing problem: Infinite amount of passengers from M groups want to
+    cross the river. However, there is only one boat with maximum capacity C.
+    There must always be the same number of passengers from each group in the boat
+    before sailing.
+
+    Solution using monitor
 */
 #define DEBUG_BOAT
 #include "CDPL.h"
+#include <cstdlib>
+
 using namespace Concurrent;
 using namespace Testbed;
 using namespace std::chrono_literals;
@@ -18,7 +29,7 @@ constexpr int allowed_count = boat_capacity/num_of_groups; //if distributed that
 constexpr auto boat_travel_time = 5s; //for simulation
 
 static_assert( boat_capacity % num_of_groups == 0 ,"Boat capacity must be divisible with number of groups");
-static_assert( num_of_groups <= 4, "Number of groups must be less or equal to 4");
+static_assert( num_of_groups <= 4, "Number of groups must be less or equal to 4 for clarity purposes");
 struct Passenger: public Thread{
     enum type_t{A,B,C,D};
     static std::atomic<int> next_id;
@@ -33,12 +44,12 @@ struct Passenger: public Thread{
         fprintf(DEBUG_STREAM, "-- PASSENGER %s#%d created --\n",map(type),id);
 #endif
     }
-};  
+};
 std::atomic<int> Passenger::next_id {0};
 
 class Boat: public Monitorable{
     int count[num_of_groups] = {0};
-    
+
     std::vector< Passenger::type_t > chosen_types;
     std::vector< const Passenger* > current_group;
 
@@ -91,14 +102,14 @@ class Boat: public Monitorable{
         chosen_types.clear();
         current_group.clear();
         boat_here = true;
-        boat_avail.signalAll(); //code can be more efficient. left as an excercise, no need to complicate 
+        boat_avail.signalAll(); //code can be more efficient. left as an excercise, no need to complicate
     }
 public:
     Boat(mutex_t& mutex):Monitorable(mutex){}
     void board(const Passenger& passenger){
         while(!boat_here)
             boat_avail.wait();
-            
+
         if(current_group.size()==0){ //boat is empty no need to test anything
             chosen_types.push_back(passenger.type);
             board_allow(passenger);

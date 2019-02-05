@@ -5,19 +5,26 @@
 	This Source Code Form is subject to the terms of the Mozilla Public
 	License, v. 2.0. If a copy of the MPL was not distributed with this
 	file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+	..............................................................................
+
+	Forming of H2O Mollecule problem: Atoms arrive at barrier at random time. Only
+	when there are 2H atoms and 1O atom can water mollecule be formed.
+
+	Solution given using barrier monitor.
 */
 
 #include "CDPL.h"
 #include <exception>
-#include <cstdlib> 
+#include <cstdlib>
 
 using namespace Concurrent;
 using namespace Testbed;
 
-typedef int t_id;
+typedef int atom_t;
 struct Atom: public Thread{
 	enum {H,O};
-	t_id type;
+	atom_t type;
 
 	void run() override;
 
@@ -36,7 +43,7 @@ class Barrier:public Monitorable{
 	int o_count = 0;
 	int form_count = 0;
 public:
-	Barrier(Mutex& mutex):Monitorable(mutex){}	
+	Barrier(Mutex& mutex):Monitorable(mutex){}
 
 	void insert(Atom& atom){
 		if(atom.type == Atom::H){
@@ -71,9 +78,10 @@ public:
 		form(atom);
 	}
 	void form(Atom& atom){
-		std::cout<<"Molecule is forming: "<< (atom.type == Atom::H ? 'H' : 'O') <<" " << std::endl;
+		if(form_count==0) std::cout<<"Molecule is forming: ";
+		std::cout << (atom.type == Atom::H ? 'H' : 'O') <<" ";
 		if(++form_count==3){
-			std::cout<<"MOLECULE H2O FORMED!!" << std::endl;
+			std::cout<<"\nMOLECULE H2O FORMED!!" << std::endl;
 			form_count = 0;
 			h_count = 0;
 			o_count = 0;
@@ -83,7 +91,7 @@ public:
 			hydrogen_buffer.signal();
 			oxygen_buffer.signal();
 		}
-		
+
 	}
 };
 

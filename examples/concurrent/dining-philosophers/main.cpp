@@ -16,18 +16,22 @@
 	forks so that the forks become available to others. Philosopher cannot start
 	eating before getting both forks.
 
-	Solution using Linda and ticket algorithm
+	Solution using semaphores and ticket algorithm
 */
 
-#define DEBUG_LINDA
 #define DEUBG_PHILOSOPHERS
 #include "CDPL.h"
 #include <cstdlib>
-using namespace Linda;
+
+using namespace Concurrent;
+using namespace Testbed;
 
 #define N 5
 
-class Philosopher: public Active<void*>{
+sem_t ticket {N-1};
+mutex_t forks[N];
+
+class Philosopher: public Thread{
 	int id;
 	inline void think(){
 		#ifdef DEUBG_PHILOSOPHERS
@@ -47,21 +51,23 @@ class Philosopher: public Active<void*>{
 			fprintf(DEBUG_STREAM, "Philosopher(%d) finished eating\n",id);
 		#endif
 	}
-public:
+public:	
 	Philosopher(int id):id(id){}
-	void* run() override{
+	void run() override{
 		int left=id, right=(id+1)%N;
 		while(1){
 			think();
-			in("ticket");
-			in("fork",left);
-			in("fork",right);
+			ticket.wait();
+			forks[left].lock();
+			forks[right].lock();
 			eat();
-			out("fork",left);
-			out("fork",right);
-			out("ticket");
+			forks[right].unlock();
+			forks[left].unlock();
+			ticket.signal();
 		}
-		return nullptr;
+	}
+	~Philosopher(){
+		join();
 	}
 };
 
@@ -70,10 +76,10 @@ int main(){
 	#ifdef DEUBG_PHILOSOPHERS
 		fprintf(DEBUG_STREAM, "-- init: %d philosophers --\n",N);
 	#endif
+
+	std::list<Philosopher> philosophers;
 	for(int i=0;i<N;i++){
-		out("fork",i);
-		eval(Philosopher(i));
-		if(i<N-1)out("ticket");
+		philosophers.push_back(Philosopher(i));
+		philosophers.back().start();
 	}
-	in("finish");
 }

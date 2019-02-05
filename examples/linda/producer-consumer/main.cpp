@@ -5,6 +5,16 @@
 	This Source Code Form is subject to the terms of the Mozilla Public
 	License, v. 2.0. If a copy of the MPL was not distributed with this
 	file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+	..............................................................................
+
+	Producer-consumer problem: 2 processes coexist, the producer and the consumer,
+	who share a common, fixed-size buffer used as a queue. The producer's job is
+	to generate data, put it into the buffer, and start again. At the same time,
+	the consumer is consuming the data (i.e., removing it from the buffer),
+	one piece at a time. Make sure that the producer won't try to add data into
+	the buffer if it's full and that the consumer won't try to remove data from an
+	empty buffer.
 */
 
 #define DEBUG_LINDA
