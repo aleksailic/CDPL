@@ -16,7 +16,7 @@
 
 #ifndef RANDOM_SEED
 #define RANDOM_SEED 836939
-#endif 
+#endif
 
 #ifndef DEBUG_STREAM
 #define DEBUG_STREAM stdout
@@ -100,29 +100,36 @@ namespace Concurrent {
 		virtual void run() = 0;
 		std::thread* thread = nullptr;
 		const char * name;
+	protected:
+		// sleep_for alias that shall be used only from inside function so always targets this_thread
+		template< class Rep, class Period>
+		void sleep_for(const std::chrono::duration<Rep, Period>& sleep_duration){
+			std::this_thread::sleep_for(sleep_duration);
+		}
 	public:
 		Thread(const char * name = "thread") :name(name) {}
 		void start() {
 			thread = new std::thread(Thread::fn_caller, this);
 #ifdef DEBUG_THREAD
-			std::cout << "THREAD[" << thread->get_id() << "]: " << name << " started" << std::endl;
+			fprintf(DEBUG_STREAM,"THREAD[%d]:%s started\n",thread->get_id(), name);
 #endif
 		}
 		void join() {
 			if (thread && thread->joinable()) {
 #ifdef DEBUG_THREAD
-				std::cout << "waiting for " << name << " to join" << std::endl;
+			fprintf(DEBUG_STREAM,"THREAD[%d]:%s joined\n",thread->get_id(), name);
 #endif
 				thread->join();
 			}
 		}
 		virtual ~Thread() {
+			//TODO: discuss whether to remove this. Library shouldn't enforce this although it has been useful when creating examples...
 			join();
 #ifdef DEBUG_THREAD
 			if (thread) {
 				auto id = thread->get_id();
 				delete thread;
-				std::cout << "THREAD[" << id << "]: " << name << " deleted" << std::endl;
+				fprintf(DEBUG_STREAM,"THREAD[%d]:%s deleted\n",id, name);
 			}
 #else
 			delete thread;
@@ -547,6 +554,10 @@ namespace Linda {
 
 			map_mutex.lock();
 			if (!map[typeid(pattern)]) {
+				if(notfound_action == RETURN){
+					map_mutex.unlock();
+					return false;
+				}
 				map[typeid(pattern)] = static_cast<void*>(new tm_vec_t<pattern>);
 				tm_vec_t<pattern>& tm_vec = *static_cast<tm_vec_t<pattern>*>(map[typeid(pattern)]);
 				tm_vec.semaphores.push_back(&m_sem);
@@ -809,10 +820,10 @@ namespace Testbed {
 		int total_num = 0;
 
 		double score() const {
-			return total_num == 0 ? 0 : ((double)passed_num) / total_num;
+			return total_num == 0 ? 0 : ((double)passed_num) / total_num * 100;
 		}
 		friend std::ostream& operator<<(std::ostream& os, const grade_t& grade) {
-			return os << grade.passed_num << '/' << grade.total_num << ' ' << grade.score() << std::endl;
+			return os << grade.passed_num << '/' << grade.total_num << ' ' << grade.score() << '%' << std::endl;
 		}
 	};
 

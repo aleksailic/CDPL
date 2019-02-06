@@ -159,6 +159,8 @@ class Captain: public Thread{
             boat->end_sail.signalAll();
         }
     }
+public:
+    ~Captain(){ join(); }
 };
 
 void Passenger::run(){
