@@ -159,7 +159,7 @@ namespace Concurrent {
 			};
 			struct compare_node_ptr {
 				bool operator() (node_t* n1, node_t* n2) {
-					return n1->rank < n2->rank; //smaller number => higher priority
+					return n1->rank > n2->rank; //smaller number => higher priority
 				}
 			};
 
@@ -273,17 +273,17 @@ namespace Concurrent {
 		public:
 			helper(Monitor* mon) :mon(mon) {
 #ifdef DEBUG_MONITOR
-				std::cout << "MONITOR: TRYING TO LOCK" << std::endl;
+				fprintf(DEBUG_STREAM,"MONITOR: TRYING TO LOCK\n");
 #endif
 				mon->mutex.lock();
 #ifdef DEBUG_MONITOR
-				std::cout << "MONITOR: LOCKING" << std::endl;
+				fprintf(DEBUG_STREAM,"MONITOR: LOCKING\n");
 #endif
 			}
 			~helper() {
 				mon->mutex.unlock();
 #ifdef DEBUG_MONITOR
-				std::cout << "MONITOR: UNLOCKING" << std::endl;
+				fprintf(DEBUG_STREAM, "MONITOR: UNLOCKING\n" );
 #endif
 			}
 			/**
@@ -296,6 +296,7 @@ namespace Concurrent {
 		template <typename ...Args>
 		Monitor(Args&&... args) :obj(mutex, std::forward<Args>(args)...) {
 #ifdef DEBUG_MONITOR
+			fprintf(DEBUG_STREAM, "MONITOR: CREATED\n");
 			std::cout << "MONITOR: CREATED" << std::endl;
 #endif
 		}

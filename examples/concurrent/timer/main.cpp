@@ -11,51 +11,77 @@
 #include <ctime>
 #include <cstdlib>
 
+#define DEBUG_ALARM
+
 using namespace Concurrent;
 using namespace Testbed;
 
-class Alarm:public Monitorable{
-	uint now = time(NULL); //current time
-	cond wakeup = cond_gen();
-public:
-	class TickThread:public Thread{
-		Alarm& my_alarm;
-		void run(){
-			my_alarm.now=time(NULL);
-			std::cout<<"TIME: "<< my_alarm.now<<std::endl;
-			if(!my_alarm.wakeup.empty() && my_alarm.wakeup.minrank()<=my_alarm.now)
-				my_alarm.wakeup.signal();
-		}
-	public:
-		TickThread(Alarm& alarm):my_alarm(alarm){}
-	};
-	Alarm(Mutex& mutex):Monitorable(mutex){}
+constexpr auto tick_interval = std::chrono::seconds(1);
 
-	void wake_me(uint ticks_from_now){
-		wakeup.wait(ticks_from_now);
-		if(!wakeup.empty() && wakeup.minrank()<=now)
+class Alarm:public Monitorable{
+	uint current_ticks = 0;
+	cond wakeup = cond_gen();
+
+	void onTick(){
+		current_ticks++;
+#ifdef DEBUG_ALARM
+		//note: printing %d for minrank instead of %u. -1 is much prettier sight than MAX_UINT
+		fprintf(DEBUG_STREAM, "-- tick: %d, minrank: %d--\n",current_ticks, wakeup.minrank());
+#endif
+		if(!wakeup.empty() && wakeup.minrank() <= current_ticks)
 			wakeup.signal();
 	}
-};
+	struct Ticker: public Thread{ 
+		void run();
+	};
+	Ticker* ticker = nullptr;
+public:
+	Alarm(Mutex& mutex):Monitorable(mutex){}
+	~Alarm(){delete ticker;}
 
-struct Worker:public Thread{
-	monitor<Alarm>& my_alarm;
-	Worker(monitor<Alarm>& my_alarm):my_alarm(my_alarm){}
-	void run() override{
-		uint wake_from  = rand() % 10;
-		std::cout << "I WAKE " << wake_from << "secs from now!" << std::endl;
-		my_alarm->wake_me(time(NULL)+wake_from);
-		std::cout << "AWAKE!"<<std::endl;
+	void wake_in(uint ticks_from_now){
+		wakeup.wait(current_ticks + ticks_from_now);
+		if(!wakeup.empty() && wakeup.minrank()<=current_ticks)
+			wakeup.signal();
+	}
+
+	void start(){
+		if(ticker == nullptr){
+			ticker = new Ticker();
+			ticker->start();
+		}
 	}
 };
+
+static monitor<Alarm> alarm;
+
+void Alarm::Ticker::run(){
+	while(true){
+		sleep_for(tick_interval);
+		alarm->onTick();
+	}
+}
+struct Worker:public Thread{
+	static std::atomic<uint> next_id;
+	uint id;
+	void run() override{
+		id = next_id++;
+		uint wake_in  = rand() % 10 + 1;
+		fprintf(stdout, "worker[#%d]: waking in %d ticks\n", id, wake_in);
+		alarm->wake_in(wake_in);
+		fprintf(stdout, "worker[#%d]: awake!\n", id);
+	}
+};
+std::atomic<uint> Worker::next_id {0};
 
 using namespace std;
 int main(){
 	srand(random_seed);
-	monitor<Alarm>*alarm = new monitor<Alarm>;
-	ThreadGenerator<Alarm::TickThread,Alarm&> alarm_tick_generator(1,1,**alarm); //generate tick every second
-	ThreadGenerator<Worker,monitor<Alarm>&> worker_generator(4,8,*alarm);
-	alarm_tick_generator.start();
+
+	ThreadGenerator<Worker> worker_generator(3,7);
 	worker_generator.start();
+
+	alarm->start();
+	
 	return 0;
 }
