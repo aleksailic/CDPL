@@ -24,24 +24,35 @@
 #include <unistd.h>
 using namespace Concurrent;
 using namespace Testbed;
-constexpr int demo_buffer_size = 4;
+using namespace std::chrono_literals;
+
+#define DEBUG_BUFFER
+
+constexpr int  buffer_size = 4;
+constexpr auto sleep_duration = 2s;
+constexpr auto sleep_variance = 1500ms;
+constexpr int  num_of_consumers = 2;
+constexpr int  num_of_producers = 3;
 
 template <class T>
 class Buffer: public Monitorable{
-	uint capacity, *data;
-	uint front = 0, rear = 0, my_size = 0;
+	T* data;
+	uint front = 0, rear = 0, my_size = 0, capacity;
 
 	cond space_avail = cond_gen(), item_avail = cond_gen();
 
 	void print(){
-		std::cout<<"BUFFER:[ ";
+		std::cout<<"BUFFER: [";
 		for(uint iter = front; iter != rear;)
 			std::cout << data[iter = (iter + 1) % capacity] << ' ';
 		std::cout<<']'<<std::endl;
+#ifdef DEBUG_BUFFER
+		fprintf(DEBUG_STREAM, "-- buffer vars: front(%d) rear(%d) my_size(%d) \n", front, rear, my_size);
+#endif
 	}
 public:
-	Buffer(Mutex& mutex, uint capacity = 10):Monitorable(mutex),capacity(capacity){
-		data = new uint[capacity]{0}; //0initialize
+	Buffer(Mutex& mutex, uint capacity = 10):Monitorable(mutex),capacity(capacity + 1){
+		data = new T[capacity];
 	}
 	void put(T& elem){
 		while(full())
@@ -55,7 +66,6 @@ public:
 	T take(){
 		while(empty())
 			item_avail.wait();
-
 		my_size--;
 		front = (front + 1) % capacity;
 		print();
@@ -63,60 +73,55 @@ public:
 		return data[front];
 	}
 	bool empty() const { return front==rear; }
-	bool full() const { return rear+1 == front; }
+	bool full() const { return (rear + 1) % capacity == front; }
 	uint size() const { return my_size; }
 };
 
+typedef monitor<Buffer<uint>> buffer_m;
+
 class Producer: public Thread{
-	monitor<Buffer<uint>>& buffer;
-	uint sleep_ms, sleep_variance;
+	buffer_m& buffer;
 public:
-	Producer(monitor<Buffer<uint>>& buffer, uint sleep_ms = 1000, uint sleep_variance = 450)
-		:buffer(buffer),sleep_ms(sleep_ms),sleep_variance(sleep_variance){}
+	Producer(buffer_m& buffer):buffer(buffer){}
 	void run() override{
 		while(true){
-			std::this_thread::sleep_for(std::chrono::milliseconds((
-				sleep_ms - sleep_variance/2 + (rand() % sleep_variance)) * 1000
-			));
-
+			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);
 			uint product = rand() % 20;
-			std::cout<<"-- produced: "<< product << std::endl;
+#ifdef DEBUG_BUFFER
+			fprintf(DEBUG_STREAM, "-- produced: %d\n", product);
+#endif
 			buffer->put(product);
 		}
 	}
-	~Producer(){
-		join();
-	}
+	~Producer(){ join(); }
 };
 
 class Consumer: public Thread{
-	monitor<Buffer<uint>>& buffer;
-	uint sleep_ms, sleep_variance;
+	buffer_m& buffer;
 public:
-	Consumer(monitor<Buffer<uint>>& buffer, uint sleep_ms = 1000, uint sleep_variance = 450)
-		:buffer(buffer),sleep_ms(sleep_ms),sleep_variance(sleep_variance){}
+	Consumer(buffer_m& buffer):buffer(buffer){}
 	void run() override{
 		while(true){
-			std::this_thread::sleep_for(std::chrono::milliseconds((
-				sleep_ms - sleep_variance/2 + (rand() % sleep_variance)) * 1000
-			));
+			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);
 			uint product = buffer->take();
-			std::cout<<"-- consumed: "<< product << std::endl;
+#ifdef DEBUG_BUFFER
+			fprintf(DEBUG_STREAM, "-- consumed: %d\n", product);
+#endif
 		}
 	}
-	~Consumer(){
-		join();
-	}
+	~Consumer(){ join(); }
 };
 
-static monitor<Buffer<uint>> buffer(demo_buffer_size);
-using namespace std;
+static buffer_m buffer(buffer_size);
 int main(){
 	srand(random_seed);
-	Consumer consumer_thread(buffer,1000,2000);
-	Producer producer_thread(buffer,1000,2000);
 
-	consumer_thread.start();
-	producer_thread.start();
+	std::vector<Consumer> consumers {num_of_consumers, buffer};
+	std::vector<Producer> producers {num_of_producers, buffer};
+	
+	for(auto& consumer: consumers)
+		consumer.start();
+	for(auto& producer: producers)
+		producer.start();
 	return 0;
 }

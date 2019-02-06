@@ -157,6 +157,7 @@ namespace Concurrent {
 					delete sem;
 				}
 			};
+			//TODO: sorting is not stable by default (STL spec), offer the ability to make it stable
 			struct compare_node_ptr {
 				bool operator() (node_t* n1, node_t* n2) {
 					return n1->rank > n2->rank; //smaller number => higher priority

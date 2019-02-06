@@ -117,7 +117,7 @@ void Car::run(){
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] IS PASSING\n";
 	print_mutex.unlock();
 	//CAR IS NOW DRIVING THROUGH THE BRIDGE
-	std::this_thread::sleep_for(std::chrono::seconds(rand() % 4 + 3));
+	sleep_for(std::chrono::seconds(rand() % 4 + 3));
 
 	print_mutex.lock();
 	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] EXITING\n";

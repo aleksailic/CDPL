@@ -153,7 +153,7 @@ class Captain: public Thread{
             if(boat->boat_here)
                 boat->start_sail.wait();
             std::cout<<"BOAT is sailing...\n";
-            std::this_thread::sleep_for(boat_travel_time);
+            sleep_for(boat_travel_time);
             std::cout<<"BOAT is here!\n";
             boat->reset();
             boat->end_sail.signalAll();

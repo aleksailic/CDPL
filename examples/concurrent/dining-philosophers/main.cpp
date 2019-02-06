@@ -37,7 +37,7 @@ class Philosopher: public Thread{
 		#ifdef DEUBG_PHILOSOPHERS
 			fprintf(DEBUG_STREAM, "Philosopher(%d) is thinking\n",id);
 		#endif
-		std::this_thread::sleep_for(std::chrono::seconds(rand()%4));
+		sleep_for(std::chrono::seconds(rand()%4));
 		#ifdef DEUBG_PHILOSOPHERS
 			fprintf(DEBUG_STREAM, "Philosopher(%d) finished thinking\n",id);
 		#endif
@@ -46,7 +46,7 @@ class Philosopher: public Thread{
 		#ifdef DEUBG_PHILOSOPHERS
 			fprintf(DEBUG_STREAM, "Philosopher(%d) is eating\n",id);
 		#endif
-		std::this_thread::sleep_for(std::chrono::seconds(rand()%4));
+		sleep_for(std::chrono::seconds(rand()%4));
 		#ifdef DEUBG_PHILOSOPHERS
 			fprintf(DEBUG_STREAM, "Philosopher(%d) finished eating\n",id);
 		#endif
