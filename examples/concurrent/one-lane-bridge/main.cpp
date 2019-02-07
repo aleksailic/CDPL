@@ -58,7 +58,6 @@ class Bridge:public Monitorable{
 	cond bridge_empty = cond_gen();
 
 public:
-	Bridge(Mutex& mutex):Monitorable(mutex){};
 	void pass(Car& car){
 		//rather lengthy if, skecth out logic on paper it is more easier than to explain like this
 		if( !enter[opp(car.dir)].empty() && ((current_dir==car.dir && flip_schedueled) || ((current_dir==opp(car.dir) && !flip_schedueled))) ){

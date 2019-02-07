@@ -103,7 +103,7 @@ namespace Concurrent {
 	protected:
 		// sleep_for alias that shall be used only from inside function so always targets this_thread
 		template< class Rep, class Period>
-		void sleep_for(const std::chrono::duration<Rep, Period>& sleep_duration){
+		void sleep_for(const std::chrono::duration<Rep, Period>& sleep_duration) {
 			std::this_thread::sleep_for(sleep_duration);
 		}
 	public:
@@ -111,13 +111,13 @@ namespace Concurrent {
 		void start() {
 			thread = new std::thread(Thread::fn_caller, this);
 #ifdef DEBUG_THREAD
-			fprintf(DEBUG_STREAM,"THREAD[%d]:%s started\n",thread->get_id(), name);
+			fprintf(DEBUG_STREAM, "THREAD[%d]:%s started\n", thread->get_id(), name);
 #endif
 		}
 		void join() {
 			if (thread && thread->joinable()) {
 #ifdef DEBUG_THREAD
-			fprintf(DEBUG_STREAM,"THREAD[%d]:%s joined\n",thread->get_id(), name);
+				fprintf(DEBUG_STREAM, "THREAD[%d]:%s joined\n", thread->get_id(), name);
 #endif
 				thread->join();
 			}
@@ -129,7 +129,7 @@ namespace Concurrent {
 			if (thread) {
 				auto id = thread->get_id();
 				delete thread;
-				fprintf(DEBUG_STREAM,"THREAD[%d]:%s deleted\n",id, name);
+				fprintf(DEBUG_STREAM, "THREAD[%d]:%s deleted\n", id, name);
 			}
 #else
 			delete thread;
@@ -139,6 +139,9 @@ namespace Concurrent {
 
 	typedef Mutex mutex_t;
 	typedef unsigned int uint;
+
+	template <class T>
+	class Monitor;
 
 	/**
 	 * Parent class for all classes that are candidates to become monitor
@@ -164,11 +167,11 @@ namespace Concurrent {
 				}
 			};
 
-			mutex_t& monitor_mutex;
+			mutex_t* & monitor_mutex;
 			std::priority_queue < node_t*, std::vector<node_t*>, compare_node_ptr > thq;
 			std::mutex mutex;
 		public:
-			cond(mutex_t& monitor_mutex) : monitor_mutex(monitor_mutex) {}
+			cond(mutex_t* & monitor_mutex) : monitor_mutex(monitor_mutex) {}
 			cond(cond&& rhs) :monitor_mutex(rhs.monitor_mutex) {}
 			/**
 			 *  Blocks the current process until the condition variable is woken up.
@@ -178,7 +181,8 @@ namespace Concurrent {
 				std::unique_lock<std::mutex> lock(mutex);
 				node_t* node = new node_t(priority);
 				thq.push(node);
-				monitor_mutex.unlock();
+				//TODO: discuss whether to add check for nullptr in case user creates bare monitorable object and calls wait on cv
+				monitor_mutex->unlock();
 				lock.unlock();
 #ifdef DEBUG_COND
 				fprintf(DEBUG_STREAM, "COND: BLOCK!\n");
@@ -188,7 +192,7 @@ namespace Concurrent {
 				fprintf(DEBUG_STREAM, "COND: RELEASE!\n");
 #endif
 				delete node;
-				monitor_mutex.lock();
+				monitor_mutex->lock();
 			}
 			/**
 			 * Unblock process with the highest priority from blocked queue
@@ -244,16 +248,21 @@ namespace Concurrent {
 		 * condition variables when they are constructed
 		 */
 		class condition_generator {
-			mutex_t& monitor_mutex;
+			mutex_t* monitor_mutex = nullptr;
+			void set_mutex(mutex_t* mutex) {
+				monitor_mutex = mutex;
+			}
 		public:
-			condition_generator(mutex_t& monitor_mutex) :monitor_mutex(monitor_mutex) {}
-			mutex_t& operator()() {
+			mutex_t*& operator()() {
 				return monitor_mutex;
 			}
+			template<class T>
+			friend class Monitor;
 		};
 		condition_generator cond_gen;
 	public:
-		Monitorable(mutex_t& monitor_mutex) :cond_gen(monitor_mutex) {}
+		template<class T>
+		friend class Monitor;
 	};
 
 	template <class T>
@@ -274,17 +283,17 @@ namespace Concurrent {
 		public:
 			helper(Monitor* mon) :mon(mon) {
 #ifdef DEBUG_MONITOR
-				fprintf(DEBUG_STREAM,"MONITOR: TRYING TO LOCK\n");
+				fprintf(DEBUG_STREAM, "MONITOR: TRYING TO LOCK\n");
 #endif
 				mon->mutex.lock();
 #ifdef DEBUG_MONITOR
-				fprintf(DEBUG_STREAM,"MONITOR: LOCKING\n");
+				fprintf(DEBUG_STREAM, "MONITOR: LOCKING\n");
 #endif
 			}
 			~helper() {
 				mon->mutex.unlock();
 #ifdef DEBUG_MONITOR
-				fprintf(DEBUG_STREAM, "MONITOR: UNLOCKING\n" );
+				fprintf(DEBUG_STREAM, "MONITOR: UNLOCKING\n");
 #endif
 			}
 			/**
@@ -295,7 +304,8 @@ namespace Concurrent {
 
 	public:
 		template <typename ...Args>
-		Monitor(Args&&... args) :obj(mutex, std::forward<Args>(args)...) {
+		Monitor(Args&&... args) :obj(std::forward<Args>(args)...) {
+			static_cast<Monitorable&>(obj).cond_gen.set_mutex(&mutex);
 #ifdef DEBUG_MONITOR
 			fprintf(DEBUG_STREAM, "MONITOR: CREATED\n");
 			std::cout << "MONITOR: CREATED" << std::endl;
@@ -344,7 +354,7 @@ namespace MPI {
 			priority_t p;
 			duration_t ttl;
 			timestamp_t ts;
-			MessageWrap(const T& message, priority_t p, const duration_t& ttl) :message(message), p(p), ttl(ttl),ts(std::chrono::high_resolution_clock::now()) {}
+			MessageWrap(const T& message, priority_t p, const duration_t& ttl) :message(message), p(p), ttl(ttl), ts(std::chrono::high_resolution_clock::now()) {}
 			friend bool operator>(const MessageWrap& mw1, const MessageWrap& mw2) { return mw1.p > mw2.p; }
 		};
 
@@ -352,7 +362,7 @@ namespace MPI {
 		buffer_t buffer;
 		const char* m_name;
 	public:
-		MonitorableMessageBox(Concurrent::Mutex& mutex, uint capacity = 10, const char* name = "default") :Monitorable(mutex), capacity(capacity), m_name(name) {}
+		MonitorableMessageBox(uint capacity = 10, const char* name = "default"): capacity(capacity), m_name(name) {}
 		void put(const T& message, priority_t p = MEDIUM, const duration_t& ttl = 0ms) override {
 			while (buffer.size() == capacity)
 				notFull.wait();
@@ -391,13 +401,15 @@ namespace MPI {
 #endif
 					if (status) *status = SUCCESS;
 					return msg_wrap.message;
-				}else {
+				}
+				else {
 #ifdef DEBUG_MPI
 					fprintf(DEBUG_STREAM, "-- MessageBox(%s): message expired --\n", m_name);
 #endif
 					if (status) *status = EXPIRED;
 				}
-			}else { //released on timeout
+			}
+			else { //released on timeout
 #ifdef DEBUG_MPI
 				fprintf(DEBUG_STREAM, "-- MessageBox(%s): timed out! --\n", m_name);
 #endif
@@ -556,7 +568,7 @@ namespace Linda {
 
 			map_mutex.lock();
 			if (!map[typeid(pattern)]) {
-				if(notfound_action == RETURN){
+				if (notfound_action == RETURN) {
 					map_mutex.unlock();
 					return false;
 				}

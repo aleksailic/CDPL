@@ -51,7 +51,7 @@ class Buffer: public Monitorable{
 #endif
 	}
 public:
-	Buffer(Mutex& mutex, uint capacity = 10):Monitorable(mutex),capacity(capacity + 1){
+	Buffer(uint capacity = 10):capacity(capacity + 1){
 		data = new T[capacity];
 	}
 	void put(T& elem){

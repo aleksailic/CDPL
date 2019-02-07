@@ -36,7 +36,6 @@ class Alarm:public Monitorable{
 	};
 	Ticker* ticker = nullptr;
 public:
-	Alarm(Mutex& mutex):Monitorable(mutex){}
 	~Alarm(){delete ticker;}
 
 	void wake_in(uint ticks_from_now){

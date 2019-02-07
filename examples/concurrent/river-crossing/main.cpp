@@ -105,7 +105,6 @@ class Boat: public Monitorable{
         boat_avail.signalAll(); //code can be more efficient. left as an excercise, no need to complicate
     }
 public:
-    Boat(mutex_t& mutex):Monitorable(mutex){}
     void board(const Passenger& passenger){
         while(!boat_here)
             boat_avail.wait();
