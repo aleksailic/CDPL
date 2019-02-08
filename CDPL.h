@@ -51,6 +51,34 @@
 #include <utility>
 #include <memory>
 
+namespace Utils {
+	template<typename ... Args>
+	std::unique_ptr<char[]> cstring_format(const char * format, Args ... args) {
+		size_t size = snprintf(nullptr, 0, format, args ...) + 1; // Extra space for '\0'
+		std::unique_ptr<char[]> buf(new char[size]);
+		snprintf(buf.get(), size, format, args ...);
+		return buf;
+	}
+
+	template<typename ... Args>
+	std::string string_format(const std::string& format, Args ... args){
+		size_t size = snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
+		std::unique_ptr<char[]> buf(new char[size]);
+		snprintf(buf.get(), size, format.c_str(), args ...);
+		return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
+	}
+}
+
+template <typename... Args>
+inline void DEBUG_WRITE(const char* name, const char* format, Args&&... args) {
+	auto preformat = Utils::cstring_format("-- %s: %s --\n", name, format);
+	auto debug_string = Utils::cstring_format(preformat.get(), std::forward<Args>(args)...);
+	fputs(debug_string.get(), DEBUG_STREAM);
+}
+inline void DEBUG_WRITE(const char* name, const char* format) {
+	fprintf(DEBUG_STREAM,"-- %s: %s --\n", name, format);
+}
+
 namespace Concurrent {
 	class Semaphore {
 		std::mutex mutex;
@@ -93,49 +121,78 @@ namespace Concurrent {
 		inline void unlock() { sem.signal(); }
 	};
 
+	class Monitorable;
 	class Thread {
+		typedef struct {
+			int id;
+			const char* name;
+		} descriptor_t;
+
+		virtual void run() = 0;
 		static void fn_caller(void * arg) {
 			static_cast<Thread*>(arg)->run();
 		}
-		virtual void run() = 0;
+
 		std::thread* thread = nullptr;
-		const char * name;
+		descriptor_t descriptor;
+
+		static std::atomic<int> next_id;
+		static std::mutex thread_map_mutex;
+		static std::unordered_map<std::thread::id, descriptor_t> std_thread_map;
 	protected:
 		// sleep_for alias that shall be used only from inside function so always targets this_thread
 		template< class Rep, class Period>
 		void sleep_for(const std::chrono::duration<Rep, Period>& sleep_duration) {
 			std::this_thread::sleep_for(sleep_duration);
 		}
+		// allow the user to change thread's name whenever he wants as it is useful for debugging
+		void set_name(const char* name) {
+			descriptor.name = name;
+			if (thread) {
+				std::unique_lock<std::mutex> lock(thread_map_mutex);
+				std_thread_map[thread->get_id()] = descriptor;
+			}
+		}
+		descriptor_t get_descriptor() const {
+			return descriptor;
+		}
+		//needed for condition printing, TODO: consider putting in private to hide inner implementaiton
+		static descriptor_t get_descriptor(std::thread::id std_thread_id) {
+			std::unique_lock<std::mutex> lock(thread_map_mutex);
+			return std_thread_map[std::this_thread::get_id()];
+		}
+		friend class Monitorable;
 	public:
-		Thread(const char * name = "thread") :name(name) {}
+		Thread(const char* name = "") :descriptor({ next_id++,name }) {}
 		void start() {
 			thread = new std::thread(Thread::fn_caller, this);
+			std::unique_lock<std::mutex> lock(thread_map_mutex);
+			std_thread_map[thread->get_id()] = descriptor;
 #ifdef DEBUG_THREAD
-			fprintf(DEBUG_STREAM, "THREAD[%d]:%s started\n", thread->get_id(), name);
+			DEBUG_WRITE("thread[#%d] %s", "started", descriptor.id, descriptor.name);
 #endif
 		}
 		void join() {
 			if (thread && thread->joinable()) {
 #ifdef DEBUG_THREAD
-				fprintf(DEBUG_STREAM, "THREAD[%d]:%s joined\n", thread->get_id(), name);
+				DEBUG_WRITE("thread[#%d] %s", "joined", descriptor.id, descriptor.name);
 #endif
 				thread->join();
 			}
 		}
 		virtual ~Thread() {
-			//TODO: discuss whether to remove this. Library shouldn't enforce this although it has been useful when creating examples...
-			join();
-#ifdef DEBUG_THREAD
-			if (thread) {
-				auto id = thread->get_id();
+			//join() removed. Library shouldn't enforce this and can create seg. faults
+			if(thread){
 				delete thread;
-				fprintf(DEBUG_STREAM, "THREAD[%d]:%s deleted\n", id, name);
-			}
-#else
-			delete thread;
+#ifdef DEBUG_THREAD
+				DEBUG_WRITE("thread[#%d] %s", "deleted", descriptor.id, descriptor.name);
 #endif
+			}
 		}
 	};
+	std::atomic<int> Thread::next_id{ 0 };
+	std::mutex Thread::thread_map_mutex{};
+	std::unordered_map<std::thread::id, Thread::descriptor_t> Thread::std_thread_map{};
 
 	typedef Mutex mutex_t;
 	typedef unsigned int uint;
@@ -170,8 +227,13 @@ namespace Concurrent {
 			mutex_t* & monitor_mutex;
 			std::priority_queue < node_t*, std::vector<node_t*>, compare_node_ptr > thq;
 			std::mutex mutex;
+			const char* name;
 		public:
-			cond(mutex_t* & monitor_mutex) : monitor_mutex(monitor_mutex) {}
+			cond(mutex_t* & monitor_mutex, const char * name = "") : monitor_mutex(monitor_mutex), name(name) {
+#ifdef DEBUG_COND
+				DEBUG_WRITE("condition %s", "created", name);
+#endif
+			}
 			cond(cond&& rhs) :monitor_mutex(rhs.monitor_mutex) {}
 			/**
 			 *  Blocks the current process until the condition variable is woken up.
@@ -185,11 +247,12 @@ namespace Concurrent {
 				monitor_mutex->unlock();
 				lock.unlock();
 #ifdef DEBUG_COND
-				fprintf(DEBUG_STREAM, "COND: BLOCK!\n");
+				auto descriptor = Thread::get_descriptor(std::this_thread::get_id());
+				DEBUG_WRITE("condition %s", "blocked thread[#%d] %s", name, descriptor.id, descriptor.name);
 #endif
 				node->sem->wait();
 #ifdef DEBUG_COND
-				fprintf(DEBUG_STREAM, "COND: RELEASE!\n");
+				DEBUG_WRITE("condition %s", "released thread[#%d] %s", name, descriptor.id, descriptor.name);
 #endif
 				delete node;
 				monitor_mutex->lock();
@@ -253,8 +316,8 @@ namespace Concurrent {
 				monitor_mutex = mutex;
 			}
 		public:
-			mutex_t*& operator()() {
-				return monitor_mutex;
+			cond operator()(const char* name = "") {
+				return cond(monitor_mutex, name);
 			}
 			template<class T>
 			friend class Monitor;
@@ -283,17 +346,17 @@ namespace Concurrent {
 		public:
 			helper(Monitor* mon) :mon(mon) {
 #ifdef DEBUG_MONITOR
-				fprintf(DEBUG_STREAM, "MONITOR: TRYING TO LOCK\n");
+				DEBUG_WRITE("monitor", "trying to lock");
 #endif
 				mon->mutex.lock();
 #ifdef DEBUG_MONITOR
-				fprintf(DEBUG_STREAM, "MONITOR: LOCKING\n");
+				DEBUG_WRITE("monitor", "locking");
 #endif
 			}
 			~helper() {
 				mon->mutex.unlock();
 #ifdef DEBUG_MONITOR
-				fprintf(DEBUG_STREAM, "MONITOR: UNLOCKING\n");
+				DEBUG_WRITE("monitor", "unlocking");
 #endif
 			}
 			/**
@@ -307,8 +370,7 @@ namespace Concurrent {
 		Monitor(Args&&... args) :obj(std::forward<Args>(args)...) {
 			static_cast<Monitorable&>(obj).cond_gen.set_mutex(&mutex);
 #ifdef DEBUG_MONITOR
-			fprintf(DEBUG_STREAM, "MONITOR: CREATED\n");
-			std::cout << "MONITOR: CREATED" << std::endl;
+			DEBUG_WRITE("monitor", "created");
 #endif
 		}
 		/**
@@ -362,14 +424,14 @@ namespace MPI {
 		buffer_t buffer;
 		const char* m_name;
 	public:
-		MonitorableMessageBox(uint capacity = 10, const char* name = "default"): capacity(capacity), m_name(name) {}
+		MonitorableMessageBox(uint capacity = 10, const char* name = "default") : capacity(capacity), m_name(name) {}
 		void put(const T& message, priority_t p = MEDIUM, const duration_t& ttl = 0ms) override {
 			while (buffer.size() == capacity)
 				notFull.wait();
 			buffer.emplace(message, p, ttl);
 			notEmpty.signal();
 #ifdef DEBUG_MPI
-			fprintf(DEBUG_STREAM, "-- MessageBox(%s): message put -- \n", m_name);
+			DEBUG_WRITE("MessageBox(%s)", "message put", m_name);
 #endif
 		}
 		T get(const duration_t& ttd = 0ms, status_t* status = nullptr) override {
@@ -397,21 +459,21 @@ namespace MPI {
 
 				if (msg_wrap.ttl == 0ms || std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - msg_wrap.ts).count() > 0) {
 #ifdef DEBUG_MPI
-					fprintf(DEBUG_STREAM, "-- MessageBox(%s): message recieved --\n", m_name);
+					DEBUG_WRITE("MessageBox(%s)", "message recieved", m_name);
 #endif
 					if (status) *status = SUCCESS;
 					return msg_wrap.message;
 				}
 				else {
 #ifdef DEBUG_MPI
-					fprintf(DEBUG_STREAM, "-- MessageBox(%s): message expired --\n", m_name);
+					DEBUG_WRITE("MessageBox(%s)", "message expired", m_name);
 #endif
 					if (status) *status = EXPIRED;
 				}
 			}
 			else { //released on timeout
 #ifdef DEBUG_MPI
-				fprintf(DEBUG_STREAM, "-- MessageBox(%s): timed out! --\n", m_name);
+				DEBUG_WRITE("MessageBox(%s)", "message timed out", m_name);
 #endif
 				if (status) *status = TIMEOUT;
 			}
@@ -576,7 +638,7 @@ namespace Linda {
 				tm_vec_t<pattern>& tm_vec = *static_cast<tm_vec_t<pattern>*>(map[typeid(pattern)]);
 				tm_vec.semaphores.push_back(&m_sem);
 #ifdef DEBUG_LINDA
-				fprintf(DEBUG_STREAM, "-- linda: locking on %s sem --\n", print_tuple(m_tuple).c_str());
+				DEBUG_WRITE("linda", "locking on %s sem", print_tuple(m_tuple).c_str());
 #endif
 				map_mutex.unlock();
 				m_sem.wait();
@@ -593,7 +655,7 @@ namespace Linda {
 						found = true;
 						if (found_action == REMOVE) {
 #ifdef DEBUG_LINDA
-							fprintf(DEBUG_STREAM, "-- linda: %s removed --\n", print_tuple(*tuple_iter).c_str());
+							DEBUG_WRITE("linda", "%s removed", print_tuple(*tuple_iter).c_str());
 #endif
 							tm_vec.tuples.erase(tuple_iter);
 						}
@@ -605,7 +667,7 @@ namespace Linda {
 						tm_vec.semaphores.push_back(&m_sem);
 						tm_vec.mutex.unlock();
 #ifdef DEBUG_LINDA
-						fprintf(DEBUG_STREAM, "-- linda: locking on %s sem --\n", print_tuple(m_tuple).c_str());
+						DEBUG_WRITE("linda", "locking on %s sem", print_tuple(m_tuple).c_str());
 #endif
 						m_sem.wait(); //lock on sem and wait
 					}
@@ -637,7 +699,7 @@ namespace Linda {
 			tm_vec.tuples.push_back(std::forward<tuple_t>(tuple));
 
 #ifdef DEBUG_LINDA
-			fprintf(DEBUG_STREAM, "-- linda: %s put --\n", print_tuple(tm_vec.tuples.back()).c_str());
+			DEBUG_WRITE("linda", "%s put", print_tuple(tm_vec.tuples.back()).c_str());
 #endif
 			//unlock and erase all semaphores
 			for (sem_t* sem : tm_vec.semaphores) {
@@ -820,7 +882,7 @@ namespace Testbed {
 		}
 	public:
 		ThreadGenerator(uint min_seconds = 1, uint max_seconds = 3, Args&&... args)
-			:random_engine(random_seed + seed_offset), random_generator(min_seconds, max_seconds), stored_args(std::forward<Args>(args)...) {
+			:Thread("generator"),random_engine(random_seed + seed_offset), random_generator(min_seconds, max_seconds), stored_args(std::forward<Args>(args)...) {
 			seed_offset += seed_increment;
 		}
 		~ThreadGenerator() {

@@ -20,7 +20,7 @@ constexpr auto tick_interval = std::chrono::seconds(1);
 
 class Alarm:public Monitorable{
 	uint current_ticks = 0;
-	cond wakeup = cond_gen();
+	cond wakeup = cond_gen("wakeup");
 
 	void onTick(){
 		current_ticks++;

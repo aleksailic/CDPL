@@ -19,27 +19,27 @@
 	Solution using monitor
 */
 
+#define DEBUG_BUFFER
+
 #include "CDPL.h"
 #include <cstdlib>
-#include <unistd.h>
+
 using namespace Concurrent;
 using namespace Testbed;
 using namespace std::chrono_literals;
 
-#define DEBUG_BUFFER
-
-constexpr int  buffer_size = 4;
+constexpr uint  buffer_size = 4;
 constexpr auto sleep_duration = 2s;
 constexpr auto sleep_variance = 1500ms;
-constexpr int  num_of_consumers = 2;
-constexpr int  num_of_producers = 3;
+constexpr uint  num_of_consumers = 2;
+constexpr uint  num_of_producers = 3;
 
 template <class T>
 class Buffer: public Monitorable{
 	T* data;
 	uint front = 0, rear = 0, my_size = 0, capacity;
 
-	cond space_avail = cond_gen(), item_avail = cond_gen();
+	cond space_avail = cond_gen("space_avail"), item_avail = cond_gen("item_avail");
 
 	void print(){
 		std::cout<<"BUFFER: [";
@@ -47,12 +47,12 @@ class Buffer: public Monitorable{
 			std::cout << data[iter = (iter + 1) % capacity] << ' ';
 		std::cout<<']'<<std::endl;
 #ifdef DEBUG_BUFFER
-		fprintf(DEBUG_STREAM, "-- buffer vars: front(%d) rear(%d) my_size(%d) \n", front, rear, my_size);
+		fprintf(DEBUG_STREAM, "-- buffer vars: front(%d) rear(%d) my_size(%d)\n", front, rear, my_size);
 #endif
 	}
 public:
 	Buffer(uint capacity = 10):capacity(capacity + 1){
-		data = new T[capacity];
+		data = new T[capacity + 1];
 	}
 	void put(T& elem){
 		while(full())
@@ -82,7 +82,7 @@ typedef monitor<Buffer<uint>> buffer_m;
 class Producer: public Thread{
 	buffer_m& buffer;
 public:
-	Producer(buffer_m& buffer):buffer(buffer){}
+	Producer(buffer_m& buffer):Thread("producer"), buffer(buffer){}
 	void run() override{
 		while(true){
 			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);
@@ -99,7 +99,7 @@ public:
 class Consumer: public Thread{
 	buffer_m& buffer;
 public:
-	Consumer(buffer_m& buffer):buffer(buffer){}
+	Consumer(buffer_m& buffer):Thread("consumer"), buffer(buffer){}
 	void run() override{
 		while(true){
 			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);

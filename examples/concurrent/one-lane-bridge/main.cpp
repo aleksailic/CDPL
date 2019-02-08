@@ -15,6 +15,9 @@
 	Solution using monitor
 */
 
+#define DEBUG_COND
+#define DEBUG_BRIDGE
+
 #include "CDPL.h"
 #include <cstdlib>
 
@@ -25,29 +28,33 @@ typedef int dir_t;
 enum {SOUTH=0,NORTH};
 dir_t opp(dir_t dir){return (dir == SOUTH ? NORTH : SOUTH);}
 
-std::atomic<int> next_id(0);
-
 class Bridge;
 class Car: public Thread{
+	static std::atomic<int> next_id;
 	void run() override;
-	const dir_t		dir = 0;
-	const int		 id;
+
+	const dir_t	dir = 0;
+	const int id;
+	std::string name;
 public:
 	Car():id(++next_id){
 		dir_t* my_dir = const_cast<dir_t*>(&dir);
 		*my_dir = rand() % 2;
+		name = Utils::string_format("CAR[%s]#%d",(dir == SOUTH ? "S" : "N"),id);
+		Thread::set_name(name.c_str());
 	};
 
 	friend Bridge;
 };
+std::atomic<int> Car::next_id {0};
 
 
 class Bridge:public Monitorable{
 	static constexpr int THRESH = 5;
 	static constexpr int MAX_CARS = 2;
 
-	cond enter [2] = { cond_gen(), cond_gen() };
-	cond car_exit = cond_gen();
+	cond enter [2] = { cond_gen("enter[S]"), cond_gen("enter[N]") };
+	cond car_exit = cond_gen("car_exit");
 
 	dir_t current_dir = NORTH;
 	uint current_count = 0;
@@ -55,7 +62,7 @@ class Bridge:public Monitorable{
 
 	bool flip_schedueled = false;
 
-	cond bridge_empty = cond_gen();
+	cond bridge_empty = cond_gen("bridge_empty");
 
 public:
 	void pass(Car& car){
@@ -103,24 +110,18 @@ public:
 };
 
 static monitor<Bridge> mon;
-mutex_t print_mutex;
 
+using namespace Utils;
 void Car::run(){
-	print_mutex.lock();
-	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] CREATED\n";
-	print_mutex.unlock();
+	std::cout << string_format("%s created\n",name.c_str());
 	//CAR TRYING TO PASS
 	mon->pass(*this);
 
-	print_mutex.lock();
-	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] IS PASSING\n";
-	print_mutex.unlock();
+	std::cout << string_format("%s is \033[1;31mpassing\033[0m\n",name.c_str());
 	//CAR IS NOW DRIVING THROUGH THE BRIDGE
 	sleep_for(std::chrono::seconds(rand() % 4 + 3));
 
-	print_mutex.lock();
-	std::cout<< "CAR[" << (dir == SOUTH ? "S" : "N") << '#' << id << "] EXITING\n";
-	print_mutex.unlock();
+	std::cout << string_format("%s exiting\n",name.c_str());
 	//CAR EXIT BRIDGE
 	mon->exit(*this);
 }
