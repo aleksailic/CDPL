@@ -27,6 +27,7 @@
 using namespace Concurrent;
 using namespace Testbed;
 using namespace std::chrono_literals;
+using namespace Utils;
 
 constexpr uint  buffer_size = 4;
 constexpr auto sleep_duration = 2s;
@@ -42,12 +43,12 @@ class Buffer: public Monitorable{
 	cond space_avail = cond_gen("space_avail"), item_avail = cond_gen("item_avail");
 
 	void print(){
-		std::cout<<"BUFFER: [";
+		std::cout << lock << "BUFFER: [";
 		for(uint iter = front; iter != rear;)
 			std::cout << data[iter = (iter + 1) % capacity] << ' ';
-		std::cout<<']'<<std::endl;
+		std::cout << ']' << std::endl << unlock;
 #ifdef DEBUG_BUFFER
-		fprintf(DEBUG_STREAM, "-- buffer vars: front(%d) rear(%d) my_size(%d)\n", front, rear, my_size);
+		DEBUG_WRITE("buffer vars", "front(%d) rear(%d) my_size(%d)", front, rear, my_size);
 #endif
 	}
 public:
@@ -88,7 +89,7 @@ public:
 			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);
 			uint product = rand() % 20;
 #ifdef DEBUG_BUFFER
-			fprintf(DEBUG_STREAM, "-- produced: %d\n", product);
+			DEBUG_WRITE("procuded", "%d", product);
 #endif
 			buffer->put(product);
 		}
@@ -105,7 +106,7 @@ public:
 			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);
 			uint product = buffer->take();
 #ifdef DEBUG_BUFFER
-			fprintf(DEBUG_STREAM, "-- consumed: %d\n", product);
+			DEBUG_WRITE("consumed", "%d", product);
 #endif
 		}
 	}

@@ -23,6 +23,7 @@
 
 using namespace Concurrent;
 using namespace Testbed;
+using namespace Utils;
 
 typedef int dir_t;
 enum {SOUTH=0,NORTH};
@@ -40,7 +41,7 @@ public:
 	Car():id(++next_id){
 		dir_t* my_dir = const_cast<dir_t*>(&dir);
 		*my_dir = rand() % 2;
-		name = Utils::string_format("CAR[%s]#%d",(dir == SOUTH ? "S" : "N"),id);
+		name = string_format("CAR[%s#%d]",(dir == SOUTH ? "S" : "N"),id);
 		Thread::set_name(name.c_str());
 	};
 
@@ -111,17 +112,16 @@ public:
 
 static monitor<Bridge> mon;
 
-using namespace Utils;
 void Car::run(){
-	std::cout << string_format("%s created\n",name.c_str());
+	std::cout << lock << name << colorize(" created", TC::YELLOW) << std::endl << unlock;
 	//CAR TRYING TO PASS
 	mon->pass(*this);
 
-	std::cout << string_format("%s is \033[1;31mpassing\033[0m\n",name.c_str());
+	std::cout << lock << name << " is " << colorize("passing",TC::RED, TS::BOLD) << std::endl << unlock;
 	//CAR IS NOW DRIVING THROUGH THE BRIDGE
 	sleep_for(std::chrono::seconds(rand() % 4 + 3));
 
-	std::cout << string_format("%s exiting\n",name.c_str());
+	std::cout << lock << name << colorize(" exiting", TC::GREEN) << std::endl << unlock;
 	//CAR EXIT BRIDGE
 	mon->exit(*this);
 }

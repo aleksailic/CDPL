@@ -10,6 +10,7 @@
 #ifndef CDPL_H
 #define CDPL_H
 
+//visual studio required
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
 #endif
@@ -51,33 +52,14 @@
 #include <utility>
 #include <memory>
 
-namespace Utils {
-	template<typename ... Args>
-	std::unique_ptr<char[]> cstring_format(const char * format, Args ... args) {
-		size_t size = snprintf(nullptr, 0, format, args ...) + 1; // Extra space for '\0'
-		std::unique_ptr<char[]> buf(new char[size]);
-		snprintf(buf.get(), size, format, args ...);
-		return buf;
-	}
-
-	template<typename ... Args>
-	std::string string_format(const std::string& format, Args ... args){
-		size_t size = snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
-		std::unique_ptr<char[]> buf(new char[size]);
-		snprintf(buf.get(), size, format.c_str(), args ...);
-		return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
-	}
-}
+//color coding under windows deps
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 template <typename... Args>
-inline void DEBUG_WRITE(const char* name, const char* format, Args&&... args) {
-	auto preformat = Utils::cstring_format("-- %s: %s --\n", name, format);
-	auto debug_string = Utils::cstring_format(preformat.get(), std::forward<Args>(args)...);
-	fputs(debug_string.get(), DEBUG_STREAM);
-}
-inline void DEBUG_WRITE(const char* name, const char* format) {
-	fprintf(DEBUG_STREAM,"-- %s: %s --\n", name, format);
-}
+inline void DEBUG_WRITE(const char* name, const char* format, Args&&... args);
+inline void DEBUG_WRITE(const char* name, const char* format);
 
 namespace Concurrent {
 	class Semaphore {
@@ -121,6 +103,120 @@ namespace Concurrent {
 		inline void unlock() { sem.signal(); }
 	};
 
+	typedef Mutex mutex_t;
+};
+
+namespace Utils {
+	template<typename ... Args>
+	std::unique_ptr<char[]> cstring_format(const char * format, Args ... args) {
+		size_t size = snprintf(nullptr, 0, format, args ...) + 1; // Extra space for '\0'
+		std::unique_ptr<char[]> buf(new char[size]);
+		snprintf(buf.get(), size, format, args ...);
+		return buf;
+	}
+
+	template<typename ... Args>
+	std::string string_format(const std::string& format, Args ... args) {
+		size_t size = snprintf(nullptr, 0, format.c_str(), args ...) + 1; // Extra space for '\0'
+		std::unique_ptr<char[]> buf(new char[size]);
+		snprintf(buf.get(), size, format.c_str(), args ...);
+		return std::string(buf.get(), buf.get() + size - 1); // We don't want the '\0' inside
+	}
+
+
+#ifdef _WIN32
+	enum class TerminalColor : uint_fast8_t {
+		BLACK = 0,
+		RED = 12,
+		GREEN = 10,
+		YELLOW = 14,
+		BLUE = 9,
+		MAGENTA = 13,
+		CYAN = 11,
+		WHITE = 14
+	};
+#else 
+	enum class TerminalColor : uint_fast8_t {
+		BLACK = 15,
+		RED = 31,
+		GREEN = 32,
+		YELLOW = 33,
+		BLUE = 34,
+		MAGENTA = 35,
+		CYAN = 36,
+		WHITE = 37
+	};
+#endif
+	enum class TerminalStyle : uint_fast8_t {
+		NORMAL = 0,
+		RESET = 0,
+		BOLD = 1,
+		DIM = 2,
+		UNDERLINE = 4,
+		BLINK = 5,
+		INVERSE = 7,
+		HIDDEN = 8
+	};
+	typedef TerminalStyle TS;
+	typedef TerminalColor TC;
+
+	struct TerminalString {
+		std::string string;
+		TerminalColor color;
+	};
+
+	TerminalString colorize(const std::string& str, TerminalColor color, TerminalStyle style = TerminalStyle::NORMAL) {
+#ifdef _WIN32
+		return TerminalString{ str, color };
+#else
+		return TerminalString{ string_format("\e[%d;%dm%s\e[0m", static_cast<uint_fast8_t>(style), static_cast<uint_fast8_t>(color), str.c_str()) };
+#endif
+	}
+	std::ostream& operator<<(std::ostream&os, const TerminalString& wcs) {
+#ifdef _WIN32
+		static HANDLE  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(hConsole, static_cast<uint_fast8_t>(wcs.color));
+		os << wcs.string;
+		SetConsoleTextAttribute(hConsole, 15);
+		return os;
+#else
+		return os << wcs.string;
+#endif
+	}
+
+	enum class PrintMutexDirective {
+		LOCK = 0,
+		UNLOCK = 1
+	};
+	auto lock = PrintMutexDirective::LOCK;
+	auto unlock = PrintMutexDirective::UNLOCK;
+
+	std::ostream& operator<<(std::ostream& os, const PrintMutexDirective& directive) {
+		static Concurrent::mutex_t print_mutex;
+		if (directive == PrintMutexDirective::LOCK)
+			print_mutex.lock();
+		else if (directive == PrintMutexDirective::UNLOCK)
+			print_mutex.unlock();
+
+		return os;
+	}
+}
+
+template <typename... Args>
+inline void DEBUG_WRITE(const char* name, const char* format, Args&&... args) {
+	auto preformat = Utils::cstring_format("-- %s: %s --\n", name, format);
+	auto debug_string = Utils::cstring_format(preformat.get(), std::forward<Args>(args)...);
+	if (DEBUG_STREAM == stdout) std::cout << Utils::lock;
+	fputs(debug_string.get(), DEBUG_STREAM);
+	if (DEBUG_STREAM == stdout) std::cout << Utils::unlock;
+}
+inline void DEBUG_WRITE(const char* name, const char* format) {
+	if (DEBUG_STREAM == stdout) std::cout << Utils::lock;
+	fprintf(DEBUG_STREAM, "-- %s: %s --\n", name, format);
+	if (DEBUG_STREAM == stdout) std::cout << Utils::unlock;
+}
+
+namespace Concurrent {
 	class Monitorable;
 	class Thread {
 		typedef struct {
@@ -182,7 +278,7 @@ namespace Concurrent {
 		}
 		virtual ~Thread() {
 			//join() removed. Library shouldn't enforce this and can create seg. faults
-			if(thread){
+			if (thread) {
 				delete thread;
 #ifdef DEBUG_THREAD
 				DEBUG_WRITE("thread[#%d] %s", "deleted", descriptor.id, descriptor.name);
@@ -194,7 +290,6 @@ namespace Concurrent {
 	std::mutex Thread::thread_map_mutex{};
 	std::unordered_map<std::thread::id, Thread::descriptor_t> Thread::std_thread_map{};
 
-	typedef Mutex mutex_t;
 	typedef unsigned int uint;
 
 	template <class T>
@@ -424,7 +519,7 @@ namespace MPI {
 		buffer_t buffer;
 		const char* m_name;
 	public:
-		MonitorableMessageBox(uint capacity = 10, const char* name = "default") : capacity(capacity), m_name(name) {}
+		MonitorableMessageBox(uint capacity = 10, const char* name = "") : capacity(capacity), m_name(name) {}
 		void put(const T& message, priority_t p = MEDIUM, const duration_t& ttl = 0ms) override {
 			while (buffer.size() == capacity)
 				notFull.wait();
@@ -882,7 +977,7 @@ namespace Testbed {
 		}
 	public:
 		ThreadGenerator(uint min_seconds = 1, uint max_seconds = 3, Args&&... args)
-			:Thread("generator"),random_engine(random_seed + seed_offset), random_generator(min_seconds, max_seconds), stored_args(std::forward<Args>(args)...) {
+			:Thread("generator"), random_engine(random_seed + seed_offset), random_generator(min_seconds, max_seconds), stored_args(std::forward<Args>(args)...) {
 			seed_offset += seed_increment;
 		}
 		~ThreadGenerator() {

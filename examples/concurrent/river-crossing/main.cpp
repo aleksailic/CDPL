@@ -24,6 +24,7 @@
 using namespace Concurrent;
 using namespace Testbed;
 using namespace std::chrono_literals;
+using namespace Utils;
 
 constexpr int num_of_groups = 2;
 constexpr int boat_capacity = 4;
@@ -46,14 +47,12 @@ struct Passenger : public Thread {
 	Passenger() {
 		id = next_id++;
 		type = static_cast<type_t>(rand() % num_of_groups);
-
-		std::ostringstream oss;
-		oss << map(type) << '#' << id;
-		name = oss.str();
+		name = string_format("%c#%d", map(type), id);
+		
 		Thread::set_name(name.data());
 
 #ifdef DEBUG_BOAT
-		fprintf(DEBUG_STREAM, "-- PASSENGER %s created --\n", name.data());
+		DEBUG_WRITE("PASSENGER %s", "created", name.data());
 #endif
 	}
 };
@@ -171,21 +170,21 @@ class Captain : public Thread {
 		while (true) {
 			if (boat->boat_here)
 				boat->start_sail.wait();
-			std::cout << "BOAT is sailing...\n";
+			std::cout << colorize("BOAT is sailing...\n", TC::GREEN);
 			sleep_for(boat_travel_time);
-			std::cout << "BOAT is here!\n";
+			std::cout << colorize("BOAT is here!\n", TC::GREEN);
 			boat->reset();
 			boat->end_sail.signalAll();
 		}
 	}
 public:
-	Captain() :Thread("captain") {}
+	Captain(): Thread("captain") {}
 	~Captain() { join(); }
 };
 
 void Passenger::run() {
 	boat->board(*this);
-	boat->sail(*this);
+	boat->sail (*this);
 }
 
 int main() {

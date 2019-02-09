@@ -27,34 +27,39 @@
 using namespace Concurrent;
 using namespace MPI;
 using namespace Testbed;
+using namespace Utils;
 
-enum dir_t{NORTH,SOUTH};
-enum op_t{WAIT,PASS,ENTER,EXIT};
-enum err_t{ERR_INVALID_OP,ERR_CAR_OVERFLOW};
+enum dir_t {NORTH,SOUTH};
+enum op_t  {WAIT,PASS,ENTER,EXIT};
+enum err_t {ERR_INVALID_OP,ERR_CAR_OVERFLOW};
 
 struct msg_t{
-    uint id;
-    op_t op;
+    uint  id;
+    op_t  op;
     dir_t dir;
-    uint mass;
+    uint  mass;
 };
+typedef MonitorMessageBox<msg_t> MailBox;
 
 class Car: public Thread{
-    MonitorMessageBox<msg_t>& bridge_mbx;
+    MailBox& bridge_mbx;
+    std::string name;
     dir_t direction;
-    uint id;
-    uint mass;
+    uint  id;
+    uint  mass;
 public:
-    static MonitorMessageBox<msg_t> mbx[N_CARS];
-    static uint next_id;
-    Car(MonitorMessageBox<msg_t>& bridge_mbx):bridge_mbx(bridge_mbx){
+    static MailBox mbx[N_CARS];
+    static std::atomic<uint> next_id;
+    Car(MailBox& bridge_mbx): bridge_mbx(bridge_mbx){
         id = next_id++;
         if(id == N_CARS)
             throw ERR_CAR_OVERFLOW;
         direction = static_cast<dir_t>(rand() % 2);
         mass = rand() % 70 + 30;
-
-        std::cout<< "CAR[" << (direction == SOUTH ? "S" : "N") << '#' << id << "] CREATED"  << std::endl;
+        name = string_format("CAR[%c#%d]", direction == SOUTH ? 'S' : 'N', id);
+        
+        Thread::set_name(name.data());
+        std::cout << lock << name << colorize(" created", TC::YELLOW) << std::endl << unlock;
     }
     void run() override{
         bridge_mbx->put(msg_t{id,ENTER,direction,mass});
@@ -62,23 +67,23 @@ public:
         while(msg.op == WAIT)
             msg = mbx[id]->get();
 
-        std::cout<< "CAR[" << (direction == SOUTH ? "S" : "N") << '#' << id << "] IS PASSING" << std::endl;
-        std::this_thread::sleep_for(std::chrono::seconds(rand() % 4 + 3));
+        std::cout << lock << name << " is " << colorize("passing",TC::RED, TS::BOLD) << std::endl << unlock;
+        sleep_for(std::chrono::seconds(rand() % 4 + 3));
 
         bridge_mbx->put(msg_t{id,EXIT,direction,mass});
-        std::cout<< "CAR[" << (direction == SOUTH ? "S" : "N") << '#' << id << "] EXITING" << std::endl;
+        std::cout << lock << name << colorize(" exiting", TC::GREEN) << std::endl << unlock;
     }
 };
-MonitorMessageBox<msg_t> Car::mbx[N_CARS];
-uint Car::next_id=0;
+MailBox Car::mbx[N_CARS];
+std::atomic<uint> Car::next_id {0};
 
 class OldBridge: public Thread{
-    MonitorMessageBox<msg_t>& mbx;
+    MailBox& mbx;
     dir_t current_dir = SOUTH;
     uint current_mass = 0;
     std::list<msg_t> wait_list;
 public:
-    OldBridge(MonitorMessageBox<msg_t>&mbx):mbx(mbx){}
+    OldBridge(MailBox&mbx): Thread("OldBridge"), mbx(mbx){}
     void run() override{
         while(true){
             msg_t msg = mbx->get();
@@ -119,15 +124,13 @@ public:
     }
 };
 
-MonitorMessageBox<msg_t>* bridge_mbx;
+static MailBox bridge_mbx {10, "oldbridge"};
+
 int main(){
     srand(539235);
 
-    bridge_mbx = new MonitorMessageBox<msg_t>(10,"oldbridge");
-
-    OldBridge olb(*bridge_mbx);
-
-    ThreadGenerator<Car,MonitorMessageBox<msg_t>&> car_gen(1,3,*bridge_mbx);
+    OldBridge olb(bridge_mbx);
+    ThreadGenerator<Car,MailBox&> car_gen(1,3,bridge_mbx);
 
     olb.start();
     car_gen.start();

@@ -26,7 +26,7 @@ class Alarm:public Monitorable{
 		current_ticks++;
 #ifdef DEBUG_ALARM
 		//note: printing %d for minrank instead of %u. -1 is much prettier sight than MAX_UINT
-		fprintf(DEBUG_STREAM, "-- tick: %d, minrank: %d--\n",current_ticks, wakeup.minrank());
+		fprintf(DEBUG_STREAM, "-- tick: %d, minrank: %d--\n", current_ticks, wakeup.minrank());
 #endif
 		if(!wakeup.empty() && wakeup.minrank() <= current_ticks)
 			wakeup.signal();

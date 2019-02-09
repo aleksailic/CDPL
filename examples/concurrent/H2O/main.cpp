@@ -20,6 +20,7 @@
 
 using namespace Concurrent;
 using namespace Testbed;
+using namespace Utils;
 
 typedef int atom_t;
 struct Atom: public Thread{
@@ -76,10 +77,14 @@ public:
 		form(atom);
 	}
 	void form(Atom& atom){
-		if(form_count==0) std::cout<<"Molecule is forming: ";
+		std::cout << lock;
+
+		if(form_count==0)
+			std::cout << "Molecule is forming: ";
 		std::cout << (atom.type == Atom::H ? 'H' : 'O') <<" ";
+
 		if(++form_count==3){
-			std::cout<<"\nMOLECULE H2O FORMED!!" << std::endl;
+			std::cout << std::endl << colorize("Molecule H2O formed!",TC::GREEN) << std::endl;
 			form_count = 0;
 			h_count = 0;
 			o_count = 0;
@@ -90,12 +95,13 @@ public:
 			oxygen_buffer.signal();
 		}
 
+		std::cout << unlock;
 	}
 };
 
 static monitor<Barrier> mon;
 void Atom::run(){
-	std::cout<< "ATOM " << (type == H ? "H" : "O") << " CREATED" << std::endl;
+	std::cout << lock << "ATOM " << colorize(type == H ? "H" : "O", TC::YELLOW) << " created\n" << unlock; 
 	mon->insert(*this);
 }
 

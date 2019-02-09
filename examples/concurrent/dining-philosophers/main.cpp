@@ -20,11 +20,13 @@
 */
 
 #define DEUBG_PHILOSOPHERS
+
 #include "CDPL.h"
 #include <cstdlib>
 
 using namespace Concurrent;
 using namespace Testbed;
+using namespace Utils;
 
 #define N 5
 
@@ -34,22 +36,14 @@ mutex_t forks[N];
 class Philosopher: public Thread{
 	int id;
 	inline void think(){
-		#ifdef DEUBG_PHILOSOPHERS
-			fprintf(DEBUG_STREAM, "Philosopher(%d) is thinking\n",id);
-		#endif
+		std::cout << string_format("Philosopher(%d) is thinking\n", id);
 		sleep_for(std::chrono::seconds(rand()%4));
-		#ifdef DEUBG_PHILOSOPHERS
-			fprintf(DEBUG_STREAM, "Philosopher(%d) finished thinking\n",id);
-		#endif
+		std::cout << string_format("Philosopher(%d) finished thinking\n",id);
 	}
 	inline void eat(){
-		#ifdef DEUBG_PHILOSOPHERS
-			fprintf(DEBUG_STREAM, "Philosopher(%d) is eating\n",id);
-		#endif
+		std::cout << string_format("Philosopher(%d) is eating\n",id);
 		sleep_for(std::chrono::seconds(rand()%4));
-		#ifdef DEUBG_PHILOSOPHERS
-			fprintf(DEBUG_STREAM, "Philosopher(%d) finished eating\n",id);
-		#endif
+		std::cout << string_format("Philosopher(%d) finished eating\n",id);
 	}
 public:	
 	Philosopher(int id):id(id){}
@@ -74,7 +68,7 @@ public:
 int main(){
 	srand(RANDOM_SEED);
 	#ifdef DEUBG_PHILOSOPHERS
-		fprintf(DEBUG_STREAM, "-- init: %d philosophers --\n",N);
+		DEBUG_WRITE("init","%d philosophers",N);
 	#endif
 
 	std::list<Philosopher> philosophers;

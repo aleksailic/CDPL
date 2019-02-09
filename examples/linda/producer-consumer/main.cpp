@@ -28,7 +28,7 @@ class Consumer : public Thread {
 	void run() override {
 		int tail, data;
 		while (1) {
-			std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 400 + 200));
+			sleep_for(std::chrono::milliseconds(rand() % 400 + 200));
 			in("tail", &tail);
 			out("tail", tail + 1);
 			in("buffer", tail, &data);
@@ -42,7 +42,7 @@ class Producer : public Thread {
 		int head,data;
 		while (1) {
 			data = rand() % 50;
-			std::this_thread::sleep_for(std::chrono::milliseconds(rand()%400+200));
+			sleep_for(std::chrono::milliseconds(rand()%400+200));
 			in("space");
 			in("head", &head);
 			out("head", head + 1);
