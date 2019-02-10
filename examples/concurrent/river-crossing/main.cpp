@@ -44,11 +44,8 @@ struct Passenger : public Thread {
 	std::string name;
 	void run() override;
 
-	Passenger() {
-		id = next_id++;
-		type = static_cast<type_t>(rand() % num_of_groups);
+	Passenger(type_t type): id(next_id++), type(type) {
 		name = string_format("%c#%d", map(type), id);
-		
 		Thread::set_name(name.data());
 
 #ifdef DEBUG_BOAT
@@ -64,7 +61,7 @@ class Boat : public Monitorable {
 	std::vector< Passenger::type_t > chosen_types;
 	std::vector< const Passenger* > current_group;
 
-	bool boat_here = true;
+	bool boat_here = false;
 
 	cond boat_avail = cond_gen("boat_avail");
 	cond boat_full = cond_gen("boat_full");
@@ -111,12 +108,15 @@ class Boat : public Monitorable {
 		std::cout << oss.str();
 	}
 
-	void reset() {
+	//for our captain
+	void captain_reset() {
 		for (int i = 0; i < num_of_groups; i++) count[i] = 0;
 		chosen_types.clear();
 		current_group.clear();
 		boat_here = true;
+		end_sail.signalAll();
 		boat_avail.signalAll(); //code can be more efficient. left as an excercise, no need to complicate
+		start_sail.wait();
 	}
 public:
 	void board(const Passenger& passenger) {
@@ -168,13 +168,10 @@ static monitor<Boat> boat;
 class Captain : public Thread {
 	void run()override {
 		while (true) {
-			if (boat->boat_here)
-				boat->start_sail.wait();
+			boat->captain_reset();
 			std::cout << colorize("BOAT is sailing...\n", TC::GREEN);
 			sleep_for(boat_travel_time);
 			std::cout << colorize("BOAT is here!\n", TC::GREEN);
-			boat->reset();
-			boat->end_sail.signalAll();
 		}
 	}
 public:
@@ -189,10 +186,13 @@ void Passenger::run() {
 
 int main() {
 	srand(RANDOM_SEED);
-	ThreadGenerator<Passenger> passenger_gen(1, 2);
-	Captain captain;
 
+	Captain captain;
 	captain.start();
-	passenger_gen.start();
+
+	std::vector<ThreadGenerator<Passenger>> generators = { {1s, 4s, Passenger::A}, {1s, 4s, Passenger::B} };
+	for(auto& generator: generators)
+		generator.start();
+		
 	return 0;
 }

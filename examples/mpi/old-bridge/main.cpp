@@ -50,17 +50,13 @@ class Car: public Thread{
 public:
     static MailBox mbx[N_CARS];
     static std::atomic<uint> next_id;
-    Car(MailBox& bridge_mbx): bridge_mbx(bridge_mbx){
-        id = next_id++;
-        if(id == N_CARS)
-            throw ERR_CAR_OVERFLOW;
-        direction = static_cast<dir_t>(rand() % 2);
-        mass = rand() % 70 + 30;
+    Car(MailBox& bridge_mbx, dir_t direction, uint mass): bridge_mbx(bridge_mbx), id(next_id++), direction(direction), mass(mass){
+        if(id == N_CARS) throw ERR_CAR_OVERFLOW;
         name = string_format("CAR[%c#%d]", direction == SOUTH ? 'S' : 'N', id);
-        
         Thread::set_name(name.data());
         std::cout << lock << name << colorize(" created", TC::YELLOW) << std::endl << unlock;
     }
+    Car(MailBox& bridge_mbx, dir_t direction): Car(bridge_mbx, direction, rand() % 70 + 30) { }
     void run() override{
         bridge_mbx->put(msg_t{id,ENTER,direction,mass});
         msg_t msg{0,WAIT};
@@ -130,10 +126,11 @@ int main(){
     srand(539235);
 
     OldBridge olb(bridge_mbx);
-    ThreadGenerator<Car,MailBox&> car_gen(1,3,bridge_mbx);
-
     olb.start();
-    car_gen.start();
+
+	std::vector<ThreadGenerator<Car>> generators = { {1s, 5s, bridge_mbx, NORTH}, {1s, 5s, bridge_mbx, SOUTH} };
+	for(auto& generator: generators)
+		generator.start();
 
     return 0;
 }

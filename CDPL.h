@@ -951,33 +951,63 @@ namespace Linda {
 };
 namespace Testbed {
 	using namespace Concurrent;
-	constexpr int random_seed = RANDOM_SEED;
-	constexpr int seed_increment = 3691;
-	std::atomic<int> seed_offset(0); //if multpiple threadgenerators are started we need to create new seed but in deterministic way
+	using namespace std::chrono_literals;
 
-	template <class T, typename ...Args>
+	constexpr int random_seed = RANDOM_SEED;
+	//if multpiple threadgenerators are started we need to create new seed but in deterministic way
+	constexpr int seed_increment = 3691;
+	std::atomic<int> seed_offset(0);
+
+	template <class T>
 	class ThreadGenerator :public Thread {
 		static_assert(std::is_base_of<Thread, T>::value, "T must inherit from Thread");
+
+		struct GeneratorInterface {
+			virtual Thread* generate() = 0;
+		};
+		template <typename... Ts>
+		class Generator : public GeneratorInterface {
+			std::tuple<Ts...> stored_args;
+			std::mutex mutex;
+			std::list<Thread*> threads;
+			template <std::size_t... Is>
+			Thread* helper (std::index_sequence<Is...>) {
+				std::unique_lock<std::mutex> lock (mutex);
+				threads.push_back(new T(std::get<Is>(stored_args)...));
+				return threads.back();
+			}
+		public:
+			Generator(Ts&&... args) : stored_args(std::forward<Ts>(args)...) {}
+			~Generator() {
+				for (Thread* thread : threads)
+					delete thread;
+			}
+			Thread* generate() {
+				return helper(std::index_sequence_for<Ts&&...>());
+			}
+		};
+
 		std::default_random_engine random_engine;
 		std::uniform_int_distribution<uint> random_generator;
-		std::tuple<Args&&...> stored_args;
-
-		//helper function for generating threads from stored arguments, really hacky stuff...
-		template<std::size_t... Is>
-		Thread* generateThread(const std::tuple<Args&&...>& tuple,
-			std::index_sequence<Is...>) {
-			return static_cast<Thread*>(new T(std::get<Is>(tuple)...));
-		}
+		std::shared_ptr<GeneratorInterface> generator;
 
 		void run() {
 			while (true) {
-				std::this_thread::sleep_for(std::chrono::seconds(random_generator(random_engine)));
-				generateThread(stored_args, std::index_sequence_for<Args&&...>())->start();
+				sleep_for(std::chrono::milliseconds(random_generator(random_engine)));
+				generator->generate()->start();
 			}
 		}
 	public:
-		ThreadGenerator(uint min_seconds = 1, uint max_seconds = 3, Args&&... args)
-			:Thread("generator"), random_engine(random_seed + seed_offset), random_generator(min_seconds, max_seconds), stored_args(std::forward<Args>(args)...) {
+		template <typename... Args>
+		ThreadGenerator(std::chrono::duration<double, std::milli> min = 1000ms, std::chrono::duration<double, std::milli> max = 3000ms, Args&&... args)
+			: Thread("generator"), random_engine(random_seed + seed_offset), random_generator(min.count(), max.count()), 
+			  generator( new Generator<Args...>(std::forward<Args>(args)...))
+		{
+			seed_offset += seed_increment;
+		}
+		ThreadGenerator(const ThreadGenerator& rhs)
+			: Thread("generator"), random_engine(random_seed + seed_offset), random_generator(rhs.random_generator), generator(rhs.generator)
+		{
 			seed_offset += seed_increment;
 		}
 		~ThreadGenerator() {

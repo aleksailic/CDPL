@@ -77,7 +77,7 @@ using namespace std;
 int main(){
 	srand(random_seed);
 
-	ThreadGenerator<Worker> worker_generator(3,7);
+	ThreadGenerator<Worker> worker_generator (3s, 7s);
 	worker_generator.start();
 
 	alarm->start();

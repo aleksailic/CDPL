@@ -22,16 +22,12 @@ using namespace Concurrent;
 using namespace Testbed;
 using namespace Utils;
 
-typedef int atom_t;
 struct Atom: public Thread{
-	enum {H,O};
-	atom_t type;
-
+	enum type_t {H,O};
+	type_t type;
 	void run() override;
 
-	Atom(){ 
-		type = rand() % 2;
-	}
+	Atom(type_t type): type(type), Thread(type == H ? "H" : "O") { }
 };
 class Barrier:public Monitorable{
 	cond enough_hydrogen = cond_gen();
@@ -107,7 +103,10 @@ void Atom::run(){
 
 int main(){
 	srand(random_seed);
-	ThreadGenerator<Atom> tg(1,3); //1 and 3 sec diff
-	tg.start();
+	std::vector<ThreadGenerator<Atom>> generators = { {1s, 2s, Atom::H}, {1s, 4s, Atom::O} };
+
+	for(auto& generator: generators)
+		generator.start();
+
 	return 0;
 }

@@ -38,9 +38,7 @@ class Car: public Thread{
 	const int id;
 	std::string name;
 public:
-	Car():id(++next_id){
-		dir_t* my_dir = const_cast<dir_t*>(&dir);
-		*my_dir = rand() % 2;
+	Car(dir_t direction): id(next_id++), dir(direction){
 		name = string_format("CAR[%s#%d]",(dir == SOUTH ? "S" : "N"),id);
 		Thread::set_name(name.c_str());
 	};
@@ -128,9 +126,10 @@ void Car::run(){
 
 int main(int argc, char** argv){
 	srand(random_seed);
-
-	std::vector< ThreadGenerator<Car> > many_car_generators(1,ThreadGenerator<Car>(1,3));
-	for(auto& gen: many_car_generators)
-		gen.start();
+	std::vector<ThreadGenerator<Car>> generators = { {1s, 5s, NORTH}, {1s, 5s, SOUTH} };
+	
+	for(auto& generator: generators)
+		generator.start();
+	
 	return 0;
 }

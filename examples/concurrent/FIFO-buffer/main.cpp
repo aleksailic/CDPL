@@ -26,7 +26,6 @@
 
 using namespace Concurrent;
 using namespace Testbed;
-using namespace std::chrono_literals;
 using namespace Utils;
 
 constexpr uint  buffer_size = 4;
