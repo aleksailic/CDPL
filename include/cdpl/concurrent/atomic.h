@@ -14,7 +14,7 @@
 #include "mutex.h"
 
 namespace cdpl {
-	namespace concurrent {
+	inline namespace concurrent {
 		template <typename T>
 		class atomic {
 			/**
@@ -50,29 +50,87 @@ namespace cdpl {
 				atomic* instance_;
 			};
 		public:
-			template <typename ...Args>
-			atomic(Args&&... args) : object_(std::forward<Args>(args)...) {}
+			atomic() = delete;
+
+			explicit atomic(const atomic<T>& rhs) : object_(rhs.object_) {}
+			explicit atomic(atomic<T>&& rhs) noexcept : object_(std::move(rhs.object_)) {}
+
+			atomic(const T& rhs) : object_(rhs) {}
+			atomic(T&& rhs) noexcept : object_(std::move(rhs)) {}
+
+			atomic& operator=(const T& object){
+				std::unique_lock<mutex> lock(mutex_);
+				cv_.notify_all();
+				object_ = object;
+				return *this;
+			}
+
+			friend bool operator==(const atomic& lhs, const T& rhs){
+				std::unique_lock<cdpl::mutex> lock(lhs.mutex_);
+				return lhs.object_ == rhs;
+			}
+			friend bool operator==(const T& lhs, const atomic& rhs){
+				return rhs == lhs;
+			}
+			friend bool operator!=(const atomic& lhs, const T& rhs){ 
+				return !(lhs == rhs);
+			}
+			friend bool operator!=(const T& lhs, const atomic& rhs){
+				return !(rhs == lhs);
+			}
+			friend bool operator<(const atomic& lhs, const T& rhs){
+				std::unique_lock<cdpl::mutex> lock(lhs.mutex_);
+				return lhs.object_ < rhs;
+			}
+			friend bool operator>(const atomic& lhs, const T& rhs){
+				std::unique_lock<cdpl::mutex> lock(lhs.mutex_);
+				return lhs.object_ > rhs;
+			}
 
 			// Call underlying object's function in mutually exclusive way.
 			atomic_helper operator->() {
 				return atomic_helper(this);
 			}
+			T operator*() {
+				return get_copy();
+			}
+			operator T() const noexcept {
+				return get_copy();
+			}
 
-			// Returns a reference to the managed object without locking
+			// Returns a reference to the managed object
 			T& get() {
 				return object_;
 			}
-
-			// Returns a copy of the managed object thread safe
-			T get_copy() {
+			T get_copy() const {
+				std::unique_lock<cdpl::mutex> lock(mutex_);
+				return object_;
+			}
+			// Lockable
+			bool try_lock() {
+				return mutex_.try_lock();
+			}
+			void lock() {
 				mutex_.lock();
-				T copy { get() };
+			}
+			void unlock() {
 				mutex_.unlock();
-				return copy;
+			}
+			// Wait on change
+			void wait() {
+				std::unique_lock<cdpl::mutex> lock(mutex_);
+				cv_.wait(lock);
+			}
+			void notify_one() noexcept{
+				cv_.notify_one();
+			}
+			void notify_all() noexcept{
+				cv_.notify_all();
 			}
 		private:
-			mutex mutex_; //atomic's mutex
+			mutable cdpl::mutex mutex_; //atomic's mutex
 			T object_; //hidden atomic object which methods will be called
+			mutable std::condition_variable cv_;
 		};
 	}
 }

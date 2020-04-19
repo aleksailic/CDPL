@@ -7,15 +7,13 @@
 	file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-#ifndef CDPL_CONCURRENT_MUTEX_H_
-#define CDPL_CONCURRENT_MUTEX_H_
+#ifndef CDPL_TEST_H_
+#define CDPL_TEST_H_
 
-#include <mutex>
+#define DEBUG_ATOMIC
+#define DEBUG_THREAD
 
-namespace cdpl {
-	inline namespace concurrent {
-		using mutex = std::mutex;
-	}
-}
+#include "concurrent/thread.h"
+#include "concurrent/atomic.h"
 
-#endif //CDPL_CONCURRENT_MUTEX_H_
+#endif // !CDPL_TEST_H_

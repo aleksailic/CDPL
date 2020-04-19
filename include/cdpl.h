@@ -10,6 +10,9 @@
 #ifndef CDPL_H_
 #define CDPL_H_
 
+#include "cdpl/utils.h"
 #include "cdpl/concurrent.h"
+#include "cdpl/linda.h"
+#include "cdpl/testbed.h"
 
 #endif // CDPL_H_

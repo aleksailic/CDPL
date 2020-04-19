@@ -14,7 +14,7 @@
 #include <condition_variable>
 
 namespace cdpl {
-	namespace concurrent {
+	inline namespace concurrent {
 		class semaphore {
 		public:
 			explicit semaphore(int val = 0) : val_(val) {}
@@ -45,6 +45,8 @@ namespace cdpl {
 			std::condition_variable cond_;
 			int val_;
 		};
+
+		using sem = semaphore;
 	}
 }
 

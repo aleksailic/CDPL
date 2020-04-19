@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 3.8)
 
 project ("cdpl" CXX)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 find_package (Threads REQUIRED)
@@ -22,7 +22,8 @@ foreach( file ${EXAMPLE_SRCS} )
 	string(REPLACE "/" "." name ${dir})
 	string(REPLACE ".main.cpp" "" name ${name})
 	string(REPLACE "examples." "" name ${name})
-    add_executable( ${name} ${file})
+	add_executable( ${name} ${file})
+	target_link_libraries(${name} Threads::Threads)
 endforeach( file ${EXAMPLE_SRCS} )
 
 #add_subdirectory ("examples")

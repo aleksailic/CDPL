@@ -1,27 +1,23 @@
-#define DEBUG_THREAD
-
 #include "../catch.hpp"
 #include <cdpl/concurrent/thread.h>
 
+#include <chrono>
 
 TEST_CASE("Threads are created", "[thread]") {
-	using thread = cdpl::concurrent::thread;
-
-	bool value_changed = false;
-
-	class worker : public thread {		
-		bool* value;
+	class worker : public cdpl::thread {	
 	public:
-		worker(bool* variable) : value(variable), thread() {}
 		void run() override {
-			DEBUG_WRITE("thread", "value changed");
-			*value = true;
+			cdpl::thread::sleep_for(std::chrono::milliseconds(200));
+			done_ = true;
 		}
+		bool done() { return done_; }
+	private:
+		bool done_ = false;
 	};
 
-	worker a{&value_changed};
+	worker a;
 	a.start();
+	REQUIRE(a.done() == false);
 	a.join();
-
-	REQUIRE(value_changed == true);
+	REQUIRE(a.done() == true);
 }

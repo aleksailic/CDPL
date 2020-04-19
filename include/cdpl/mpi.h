@@ -10,6 +10,8 @@
 #ifndef CDPL_MPI_H_
 #define CDPL_MPI_H_
 
+#include <chrono>
+
 namespace cdpl {
 	namespace mpi {
 		using namespace std::chrono_literals;

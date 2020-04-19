@@ -19,7 +19,7 @@
 #include <string>
 
 namespace cdpl {
-	namespace concurrent {
+	inline namespace concurrent {
 		class thread {
 		public:
 			using id = size_t;
@@ -93,13 +93,6 @@ namespace cdpl {
 			std::unique_ptr<std::thread> thread_;
 			descriptor desc_;
 			mutable std::mutex mutex_;
-
-		friend bool operator<(const thread& lhs, const thread& rhs){
-			return lhs.desc_.id < lhs.desc_.id;
-		}
-		friend bool operator>(const thread& lhs, const thread& rhs) {
-			return lhs.desc_.id > lhs.desc_.id;
-		}
 		};
 
 		thread::atomic_id thread::next_id{ 0 };
