@@ -10,11 +10,10 @@
 #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
+#define DEBUG
 #include "test.hpp"
 
 int main(int argc, char* argv[]) {
-	int result = Catch::Session().run(argc, argv);
-
-	system("pause");
-	return result;
+	const char* args[] = { argv[0], "--wait-for-keypress both" };
+	return Catch::Session().run(2, args);
 }

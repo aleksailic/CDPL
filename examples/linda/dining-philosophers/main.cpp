@@ -21,11 +21,13 @@
 
 #define DEBUG_LINDA
 #define DEUBG_PHILOSOPHERS
-#include "CDPL.h"
-#include <cstdlib>
-using namespace Linda;
 
-#define N 5
+#include "cdpl.h"
+
+#include <cstdlib>
+
+using namespace cdpl::linda;
+constexpr int N = 5;
 
 class Philosopher: public Active<void*>{
 	int id;

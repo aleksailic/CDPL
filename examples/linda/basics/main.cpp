@@ -13,13 +13,12 @@
 
 #define DEBUG_LINDA
 
-#include "CDPL.h"
+#include "cdpl.h"
+
 #include <cstdlib>
 #include <cmath>
 
-using namespace Linda;
-using namespace Concurrent;
-
+using namespace cdpl::linda;
 constexpr int nums_to_calculate = 3;
 
 /**
@@ -31,9 +30,9 @@ int put_random(){
 	return (rand() % 10 + 2);
 }
 
-struct RandomGenerator: public Thread{
+struct RandomGenerator: public cdpl::thread{
 	void run(){
-		while(!rdp("numbers_calculated",nums_to_calculate)){
+		while(!rdp("numbers_calculated", nums_to_calculate)){
 			sleep_for(std::chrono::seconds(rand() % 5));
 			eval("random_num", put_random);
 		}

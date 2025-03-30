@@ -19,34 +19,34 @@
 	Solution using semaphores and ticket algorithm
 */
 
-#define DEUBG_PHILOSOPHERS
+#define DEBUG
 
-#include "CDPL.h"
+#include <cdpl.h>
 #include <cstdlib>
+#include <iostream>
+#include <list>
 
-using namespace Concurrent;
-using namespace Testbed;
-using namespace Utils;
+constexpr auto N = 5;
 
-#define N 5
+cdpl::sem ticket(N-1, "ticket");
+cdpl::mutex forks[N];
 
-sem_t ticket {N-1};
-mutex_t forks[N];
+using namespace cdpl::utils;
 
-class Philosopher: public Thread{
+class Philosopher: public cdpl::thread{
 	int id;
-	inline void think(){
-		std::cout << string_format("Philosopher(%d) is thinking\n", id);
-		sleep_for(std::chrono::seconds(rand()%4));
-		std::cout << string_format("Philosopher(%d) finished thinking\n",id);
+	void think(){
+		std::cout << lock << string_format("Philosopher(%d) is thinking\n", id) << unlock;
+		sleep_for(std::chrono::seconds(rand() % 4));
+		std::cout << lock << string_format("Philosopher(%d) finished thinking\n", id) << unlock;
 	}
-	inline void eat(){
-		std::cout << string_format("Philosopher(%d) is eating\n",id);
-		sleep_for(std::chrono::seconds(rand()%4));
-		std::cout << string_format("Philosopher(%d) finished eating\n",id);
+	void eat(){
+		std::cout << lock << string_format("Philosopher(%d) is eating\n", id) << unlock;
+		sleep_for(std::chrono::seconds(rand() % 4));
+		std::cout << lock << string_format("Philosopher(%d) finished eating\n", id) << unlock;
 	}
 public:	
-	Philosopher(int id):id(id){}
+	Philosopher(int id) : id(id), cdpl::thread(string_format("philosopher #%d", id)) { }
 	void run() override{
 		int left=id, right=(id+1)%N;
 		while(1){
@@ -66,14 +66,15 @@ public:
 };
 
 int main(){
-	srand(RANDOM_SEED);
-	#ifdef DEUBG_PHILOSOPHERS
-		DEBUG_WRITE("init","%d philosophers",N);
-	#endif
+	cdpl::log::set_level(cdpl::log::type::all);
+	cdpl::log::info("philosophers", "N = %d", N);
+	cdpl::log::info("philosophers", "ticket = %d", N - 1);
+
+	srand(cdpl::testbed::random_seed);
 
 	std::list<Philosopher> philosophers;
 	for(int i=0;i<N;i++){
-		philosophers.push_back(Philosopher(i));
+		philosophers.emplace_back(i);
 		philosophers.back().start();
 	}
 }

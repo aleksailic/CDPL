@@ -19,57 +19,56 @@
 	Solution using monitor
 */
 
-#define DEBUG_BUFFER
-
-#include "CDPL.h"
+#include <cdpl.h>
+#include <chrono>
 #include <cstdlib>
 
-using namespace Concurrent;
-using namespace Testbed;
-using namespace Utils;
+using namespace std::chrono_literals;
+using uint = unsigned int;
 
-constexpr uint  buffer_size = 4;
+constexpr uint buffer_size = 4;
 constexpr auto sleep_duration = 2s;
 constexpr auto sleep_variance = 1500ms;
-constexpr uint  num_of_consumers = 2;
-constexpr uint  num_of_producers = 3;
+constexpr uint num_of_consumers = 2;
+constexpr uint num_of_producers = 3;
 
 template <class T>
-class Buffer: public Monitorable{
+class Buffer: public cdpl::monitorable {
 	T* data;
 	uint front = 0, rear = 0, my_size = 0, capacity;
 
-	cond space_avail = cond_gen("space_avail"), item_avail = cond_gen("item_avail");
+	cdpl::condition_variable space_avail = condition_binder("space_avail");
+	cdpl::condition_variable item_avail  = condition_binder("item_avail");
 
 	void print(){
-		std::cout << lock << "BUFFER: [";
+		std::cout << cdpl::utils::lock << "BUFFER: [";
 		for(uint iter = front; iter != rear;)
 			std::cout << data[iter = (iter + 1) % capacity] << ' ';
-		std::cout << ']' << std::endl << unlock;
-#ifdef DEBUG_BUFFER
-		DEBUG_WRITE("buffer vars", "front(%d) rear(%d) my_size(%d)", front, rear, my_size);
-#endif
+		std::cout << ']' << std::endl << cdpl::utils::unlock;
+
+		cdpl::log::debug("buffer", "front(%d) rear(%d) my_size(%d)", front, rear, my_size);
 	}
 public:
-	Buffer(uint capacity = 10):capacity(capacity + 1){
+	Buffer(uint capacity = 10) : capacity(capacity + 1) {
 		data = new T[capacity + 1];
 	}
-	void put(T& elem){
+
+	void put(T& elem) {
 		while(full())
 			space_avail.wait();
 		my_size++;
 		rear = (rear + 1) % capacity;
 		data[rear] = elem;
 		print();
-		item_avail.signal();
+		item_avail.notify_one();
 	}
-	T take(){
+	T take() {
 		while(empty())
 			item_avail.wait();
 		my_size--;
 		front = (front + 1) % capacity;
 		print();
-		space_avail.signal();
+		space_avail.notify_one();
 		return data[front];
 	}
 	bool empty() const { return front==rear; }
@@ -77,51 +76,51 @@ public:
 	uint size() const { return my_size; }
 };
 
-typedef monitor<Buffer<uint>> buffer_m;
+using buffer_monitor = cdpl::monitor<Buffer<uint>>;
 
-class Producer: public Thread{
-	buffer_m& buffer;
+class Producer: public cdpl::thread {
+	buffer_monitor& buffer;
 public:
-	Producer(buffer_m& buffer):Thread("producer"), buffer(buffer){}
+	Producer(buffer_monitor& buffer) : cdpl::thread("producer"), buffer(buffer) {}
+	~Producer() { join(); }
+
 	void run() override{
 		while(true){
 			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);
 			uint product = rand() % 20;
-#ifdef DEBUG_BUFFER
-			DEBUG_WRITE("procuded", "%d", product);
-#endif
+			cdpl::log::debug("producer", "produced: %d", product);
 			buffer->put(product);
 		}
 	}
-	~Producer(){ join(); }
 };
 
-class Consumer: public Thread{
-	buffer_m& buffer;
+class Consumer: public cdpl::thread {
+	buffer_monitor& buffer;
 public:
-	Consumer(buffer_m& buffer):Thread("consumer"), buffer(buffer){}
-	void run() override{
+	Consumer(buffer_monitor& buffer) : cdpl::thread("consumer"), buffer(buffer) {}
+	~Consumer() { join(); }
+
+	void run() override {
 		while(true){
 			sleep_for(sleep_duration - sleep_variance/2  + ((float)rand()/(float)(RAND_MAX))*sleep_variance);
 			uint product = buffer->take();
-#ifdef DEBUG_BUFFER
-			DEBUG_WRITE("consumed", "%d", product);
-#endif
+			cdpl::log::debug("consumer", "consumed: %d", product);
 		}
 	}
-	~Consumer(){ join(); }
 };
 
-static buffer_m buffer(buffer_size);
-int main(){
-	srand(random_seed);
+static buffer_monitor buffer(buffer_size);
 
-	std::vector<Consumer> consumers {num_of_consumers, buffer};
-	std::vector<Producer> producers {num_of_producers, buffer};
+int main(){
+	srand(cdpl::testbed::random_seed);
+
+	std::vector<Consumer> consumers(num_of_consumers, buffer);
+	std::vector<Producer> producers(num_of_producers, buffer);
 	
 	for(auto& consumer: consumers)
 		consumer.start();
 	for(auto& producer: producers)
 		producer.start();
+
 	return 0;
 }

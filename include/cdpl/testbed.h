@@ -63,7 +63,7 @@ namespace cdpl {
 			};
 
 			std::default_random_engine random_engine;
-			std::uniform_int_distribution<uint> random_generator;
+			std::uniform_int_distribution<unsigned int> random_generator;
 			std::shared_ptr<GeneratorInterface> generator;
 
 			void run() {

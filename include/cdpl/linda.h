@@ -35,7 +35,7 @@ namespace cdpl {
 			struct tm_vec_t {
 				cdpl::mutex mutex;
 				std::vector<T> tuples;
-				std::vector<sem_t*> semaphores;
+				std::vector <cdpl::sem*> semaphores;
 			};
 
 			enum on_found_t { NOTHING, REMOVE };
@@ -234,7 +234,7 @@ namespace cdpl {
 				DEBUG_WRITE("linda", "%s put", print_tuple(tm_vec.tuples.back()).c_str());
 #endif
 				//unlock and erase all semaphores
-				for (sem_t* sem : tm_vec.semaphores) {
+				for (cdpl::sem* sem : tm_vec.semaphores) {
 					sem->signal();
 				}
 				tm_vec.semaphores.clear();

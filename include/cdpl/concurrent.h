@@ -14,5 +14,6 @@
 #include "concurrent/mutex.h"
 #include "concurrent/semaphore.h"
 #include "concurrent/thread.h"
+#include "concurrent/monitor.h"
 
 #endif // !CDPL_CONCURRENT_H_

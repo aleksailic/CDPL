@@ -11,10 +11,12 @@
 #define CDPL_CONCURRENT_MUTEX_H_
 
 #include <mutex>
+#include <shared_mutex>
 
 namespace cdpl {
 	inline namespace concurrent {
 		using mutex = std::mutex;
+		using shared_mutex = std::shared_mutex;
 	}
 }
 

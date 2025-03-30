@@ -7,10 +7,8 @@
 	file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-#ifndef CDPL_UTILS_PRINTING
-#define CDPL_UTILS_PRINTING
-
-#include "common.h"
+#ifndef CDPL_UTILS_COLORIZE
+#define CDPL_UTILS_COLORIZE
 
 #include <string>
 
@@ -81,4 +79,4 @@ namespace cdpl {
 	}
 }
 
-#endif //CDPL_UTILS_PRINTING
+#endif //CDPL_UTILS_COLORIZE

@@ -17,8 +17,8 @@
 #include "CDPL.h"
 #include <cstdlib>
 
-using namespace Linda;
-using namespace Testbed;
+using namespace cdpl::linda;
+using namespace cdpl::testbed;
 
 typedef const char * date_t;
 typedef int checksum_t; //error correcting checksum, here we just sum all id digits

@@ -10,6 +10,8 @@
 #ifndef CDPL_CONCURRENT_SEMAPHORE_H_
 #define CDPL_CONCURRENT_SEMAPHORE_H_
 
+#include "../utils/log.h"
+
 #include <mutex>
 #include <condition_variable>
 
@@ -17,7 +19,7 @@ namespace cdpl {
 	inline namespace concurrent {
 		class semaphore {
 		public:
-			explicit semaphore(int val = 0) : val_(val) {}
+			explicit semaphore(int val = 0, const std::string& name = "semaphore") : val_(val), name_(name) {}
 
 			/**
 			 * Increments the internal value of semaphore by 1.
@@ -26,6 +28,7 @@ namespace cdpl {
 			 */
 			void signal() {
 				std::unique_lock<std::mutex> lock{ mutex_ };
+				if constexpr (cdpl::log::enabled) cdpl::log::debug("semaphore", "%s:%d signalled", name_.c_str(), val_);
 				if (val_++ < 0)
 					cond_.notify_one();
 			}
@@ -37,10 +40,12 @@ namespace cdpl {
 			 */
 			void wait() {
 				std::unique_lock<std::mutex> lock(mutex_);
+				if constexpr (cdpl::log::enabled) cdpl::log::debug("semaphore", "%s:%d wait called", name_.c_str(), val_);
 				if (--val_ < 0)
 					cond_.wait(lock);
 			}
 		private:
+			std::string name_;
 			std::mutex mutex_;
 			std::condition_variable cond_;
 			int val_;

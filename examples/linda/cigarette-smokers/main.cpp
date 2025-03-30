@@ -22,9 +22,10 @@
 #define DEBUG_LINDA
 #define DEBUG_SMOKERS
 
-#include "CDPL.h"
+#include "cdpl.h"
+
 #include <cstdlib>
-using namespace Linda;
+using namespace cdpl::linda;
 
 void* agent(){
 	while(1){

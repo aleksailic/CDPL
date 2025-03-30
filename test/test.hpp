@@ -10,10 +10,9 @@
 #ifndef CDPL_TEST_H_
 #define CDPL_TEST_H_
 
-#define DEBUG_ATOMIC
-#define DEBUG_THREAD
-
+#include "utils/log.h"
 #include "concurrent/thread.h"
 #include "concurrent/atomic.h"
+#include "concurrent/monitor.h"
 
 #endif // !CDPL_TEST_H_

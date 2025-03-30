@@ -10,7 +10,9 @@
 #ifndef CDPL_UTILS_H_
 #define CDPL_UTILS_H_
 
-#include "utils/common.h"
 #include "utils/colorize.h"
+#include "utils/stream_lock.h"
+#include "utils/string_format.h"
+#include "utils/log.h"
 
 #endif // !CDPL_UTILS_H_

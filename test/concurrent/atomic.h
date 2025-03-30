@@ -72,8 +72,9 @@ TEST_CASE("Atomic initialization", "[atomic]") {
 			std::chrono::time_point end_time = std::chrono::high_resolution_clock::now();
 			auto diff = end_time - start_time;
 			REQUIRE(diff < std::chrono::milliseconds(200));
-
+			
 			SECTION("Calling wait hangs until value changes") {
+				REQUIRE(s.get().a() == 5);
 				s.wait();
 				REQUIRE(s.get().a() == 6);
 				std::chrono::time_point end_time = std::chrono::high_resolution_clock::now();
@@ -81,6 +82,7 @@ TEST_CASE("Atomic initialization", "[atomic]") {
 				REQUIRE(diff >= std::chrono::milliseconds(200));
 			}
 		}
+
 
 		SECTION("get_copy waits for mutex release") {
 			// try getting something

@@ -10,7 +10,7 @@
 #ifndef CDPL_CONCURRENT_THREAD_H_
 #define CDPL_CONCURRENT_THREAD_H_
 
-#include "../utils/common.h"
+#include "../utils/log.h"
 
 #include <memory>
 #include <atomic>
@@ -31,35 +31,32 @@ namespace cdpl {
 				finished
 			};
 			struct descriptor {
-				descriptor(const std::string& name) : name(name) {}
-
 				std::string name;
 				thread::status status = thread::status::idle;
 				thread::id id = ++thread::next_id;
 			};
 			
-			thread(const std::string& name = "") : desc_(name) {}
+			thread(const std::string& name = "thread") : desc_{ name } {}
 			virtual ~thread() {}
 
 			thread(const thread&) = delete;
 			thread& operator=(const thread&) = delete;
 
 			void start() {
+				// TODO: do we need a lock and escape multiple starts, or should terminate if detected?
 				std::unique_lock<std::mutex> lock{ mutex_ };
 				if (desc_.status == status::idle) {
 					thread_ = std::make_unique<std::thread>(thread_runner, this);
 					desc_.status = status::active;
-#ifdef DEBUG_THREAD
-					DEBUG_WRITE("thread[#%u] %s", "started", desc_.id, desc_.name.c_str());
-#endif
+					if constexpr (cdpl::log::enabled)
+						cdpl::log::debug("thread", "%s[#%u]: started", desc_.name.c_str(), desc_.id);
 				}
 			}
 
 			void join() {
 				if (thread_ && thread_->joinable()) {
-#ifdef DEBUG_THREAD
-					DEBUG_WRITE("thread[#%u] %s", "joined", desc_.id, desc_.name.c_str());
-#endif
+					if constexpr (cdpl::log::enabled)
+						cdpl::log::debug("thread", "%s[#%u]: joined", desc_.name.c_str(), desc_.id);
 					thread_->join();
 				}
 			}
